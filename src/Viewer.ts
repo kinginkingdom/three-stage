@@ -131,6 +131,94 @@ export class Viewer {
     return this.optimizer.enableBVH(this.root, this.config.bvh ?? {});
   }
 
+  /**
+   * 调试用：打印所有 userData.interact === true 的对象及其可交互子 mesh
+   * 用于排查“点不到”的原因（地板等未打标则不会出现在此列表）
+   */
+  debugPrintInteractables(): void {
+    this.assertNotDisposed();
+    const interactRoots: THREE.Object3D[] = [];
+    const interactableMeshes: { obj: THREE.Object3D; path: string }[] = [];
+    const nonInteractableMeshes: { obj: THREE.Object3D; path: string }[] = [];
+
+    const getPath = (o: THREE.Object3D): string => {
+      const parts: string[] = [];
+      let cur: THREE.Object3D | null = o;
+      while (cur && cur !== this.root) {
+        parts.unshift(cur.name || cur.type || cur.uuid.slice(0, 8));
+        cur = cur.parent;
+      }
+      return parts.join(' / ');
+    };
+
+    const hasInteractInAncestry = (o: THREE.Object3D): boolean => {
+      let cur: THREE.Object3D | null = o;
+      while (cur) {
+        if ((cur.userData as { interact?: boolean })?.interact === true) return true;
+        cur = cur.parent;
+      }
+      return false;
+    };
+
+    this.root.traverse((o) => {
+      const ud = o.userData as { interact?: boolean } | undefined;
+      if (ud?.interact === true) interactRoots.push(o);
+
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh) {
+        const path = getPath(o);
+        if (hasInteractInAncestry(o)) {
+          interactableMeshes.push({ obj: o, path });
+        } else {
+          nonInteractableMeshes.push({ obj: o, path });
+        }
+      }
+    });
+
+    console.group('[three-stage] debugPrintInteractables');
+    console.log('打标 interact=true 的根节点:', interactRoots.length);
+    interactRoots.forEach((r, i) => {
+      console.log(`  [${i}]`, r.name || r.type, r.uuid, getPath(r));
+    });
+    console.log('可交互的 Mesh（点击会命中）:', interactableMeshes.length);
+    interactableMeshes.forEach((m, i) => {
+      console.log(`  [${i}]`, m.obj.name || m.obj.type, m.path);
+    });
+    console.log('不可交互的 Mesh（点不到）:', nonInteractableMeshes.length);
+    nonInteractableMeshes.forEach((m, i) => {
+      console.log(`  [${i}]`, m.obj.name || m.obj.type, m.path);
+    });
+    console.groupEnd();
+  }
+
+  /**
+   * 调试用：打印整个场景树（root 下所有节点）
+   * @param maxDepth 最大层级深度，默认 10
+   */
+  debugPrintScene(maxDepth = 10): void {
+    this.assertNotDisposed();
+    const lines: string[] = [];
+
+    const visit = (o: THREE.Object3D, depth: number) => {
+      if (depth > maxDepth) return;
+      const indent = '  '.repeat(depth);
+      const name = (o as { name?: string }).name || '(unnamed)';
+      const type = (o as { type?: string }).type || o.constructor.name;
+      const interact = (o.userData as { interact?: boolean })?.interact;
+      const extra = interact !== undefined ? ` [interact=${interact}]` : '';
+      const meshInfo = (o as THREE.Mesh).isMesh ? ' [Mesh]' : '';
+      lines.push(`${indent}${name} (${type})${meshInfo}${extra}`);
+      o.children.forEach((c) => visit(c, depth + 1));
+    };
+
+    lines.push('ViewerRoot');
+    this.root.children.forEach((c) => visit(c, 1));
+
+    console.group('[three-stage] debugPrintScene');
+    lines.forEach((l) => console.log(l));
+    console.groupEnd();
+  }
+
   async load(url: string, options: LoadOptions = {}): Promise<THREE.Group> {
     this.assertNotDisposed();
     this.setState('loading');
@@ -229,15 +317,30 @@ export class Viewer {
       this.visualizer.setHighlight(null);
       return;
     }
-    // 约定：如果某个父节点标了 userData.highlightRoot=true，则优先高亮该父节点（用于“整柜/整设备”）
+    // 高亮范围：优先用点击对象本身（若 interact=true），否则找最近的 interact 祖先
     let obj: THREE.Object3D = hit.intersectedObject;
-    let cur: THREE.Object3D | null = obj;
-    while (cur) {
-      if (cur.userData && (cur.userData as { highlightRoot?: boolean }).highlightRoot) {
-        obj = cur;
-        break;
+    if ((obj.userData as { interact?: boolean })?.interact === true) {
+      // 点击对象本身即 interact 层，无需再往上找
+    } else {
+      let cur: THREE.Object3D | null = obj.parent;
+      while (cur) {
+        if ((cur.userData as { interact?: boolean })?.interact === true) {
+          obj = cur;
+          break;
+        }
+        cur = cur.parent;
       }
-      cur = cur.parent;
+      // 兼容：若未找到 interact，再尝试 highlightRoot
+      if (obj === hit.intersectedObject) {
+        cur = hit.intersectedObject;
+        while (cur) {
+          if ((cur.userData as { highlightRoot?: boolean })?.highlightRoot) {
+            obj = cur;
+            break;
+          }
+          cur = cur.parent;
+        }
+      }
     }
     this.visualizer.setHighlight({ object: obj, instanceId: hit.instanceId }, style);
   }
@@ -303,6 +406,7 @@ export class Viewer {
       this.updateShadowAuto(t, dt);
 
       this.navigator.update(dt);
+      this.visualizer.update(dt);
       this.renderer.render(this.scene, this.camera);
       this.raf = requestAnimationFrame(tick);
     };

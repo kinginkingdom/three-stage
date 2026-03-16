@@ -26,7 +26,7 @@
 ## 安装
 
 ```bash
-npm install three three-stage
+npm install three @murmur_han/three-stage
 ```
 
 > 注意：`three`、`gsap`、`three-mesh-bvh` 均作为 **peer 依赖** 使用，不会被打包进库本身。
@@ -34,7 +34,7 @@ npm install three three-stage
 ## Quick Start
 
 ```ts
-import { Viewer } from 'three-stage';
+import { Viewer } from '@murmur_han/three-stage';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#c');
 if (!canvas) throw new Error('Canvas not found');
@@ -54,7 +54,7 @@ const viewer = new Viewer({
 });
 
 viewer.on('object-click', (hit) => {
-  viewer.setHighlightFromInteraction(hit, { color: 0x00e5ff, emissiveIntensity: 1.2 });
+  viewer.setHighlightFromInteraction(hit, { breathing: true, color: 0x4fc3f7 });
   if (hit.intersectedObject) {
     viewer.focus(hit.intersectedObject, { durationMs: 500, padding: 1.4 }).catch(() => void 0);
   }
@@ -222,8 +222,21 @@ viewer.startRoaming(
 
 ```ts
 viewer.on('object-click', (hit) => {
-  viewer.setHighlightFromInteraction(hit, { color: 0xff6600, emissiveIntensity: 1.4 });
+  viewer.setHighlightFromInteraction(hit, { breathing: true, color: 0x4fc3f7 });
 });
+```
+
+**HighlightStyle 配置**（默认呼吸灯，柔和高亮）：
+
+```ts
+interface HighlightStyle {
+  color?: number;           // 高亮颜色，默认 0x4fc3f7
+  breathing?: boolean;      // 呼吸灯效果，默认 true
+  breathingMin?: number;   // 呼吸最低强度，默认 0.12
+  breathingMax?: number;   // 呼吸最高强度，默认 0.35
+  breathingSpeed?: number; // 呼吸周期（秒），默认 2
+  emissiveIntensity?: number; // 非呼吸灯时的固定强度
+}
 ```
 
 - 若命中 InstancedMesh 且有 `instanceColor`，则只高亮一个实例。

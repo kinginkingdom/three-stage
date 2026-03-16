@@ -21,6 +21,9 @@ export class EffectManager {
   private highlighted: HighlightTarget | null = null;
   private materialSnapshots = new Map<string, MaterialSnapshot>();
   private instancedSnapshots = new Map<string, Float32Array>(); // key: uuid
+  private highlightColor = new THREE.Color();
+  private breathingOpts: { min: number; max: number; speed: number } | null = null;
+  private breathingTime = 0;
 
   private zones = new Map<string, THREE.Object3D>();
 
@@ -38,19 +41,31 @@ export class EffectManager {
     this.assertNotDisposed();
     if (!target) {
       this.clearHighlight();
+      this.breathingOpts = null;
       return;
     }
     if (this.highlighted) this.clearHighlight();
 
-    const color = new THREE.Color(style.color ?? 0xffcc00);
-    const emissiveIntensity = style.emissiveIntensity ?? 1.0;
+    const color = new THREE.Color(style.color ?? 0x4fc3f7);
+    const breathing = style.breathing ?? true;
+    const emissiveIntensity = style.emissiveIntensity ?? (breathing ? style.breathingMax ?? 0.35 : 0.3);
+
+    if (breathing) {
+      this.breathingOpts = {
+        min: style.breathingMin ?? 0.1,
+        max: style.breathingMax ?? 0.24,
+        speed: style.breathingSpeed ?? 0.5,
+      };
+      this.breathingTime = 0;
+      this.highlightColor.copy(color);
+    } else {
+      this.breathingOpts = null;
+    }
 
     // Instanced per-instance highlight via instanceColor.
     const inst = target.object as unknown as THREE.InstancedMesh;
     if (inst && inst.isInstancedMesh && typeof target.instanceId === 'number') {
       if (!inst.instanceColor) {
-        // If not present, we cannot non-destructively highlight single instance without custom shader.
-        // Fallback: highlight whole mesh material.
         this.highlightWholeObject(target.object, color, emissiveIntensity);
       } else {
         const uuid = inst.uuid;
@@ -66,6 +81,37 @@ export class EffectManager {
 
     this.highlightWholeObject(target.object, color, emissiveIntensity);
     this.highlighted = target;
+  }
+
+  /** 每帧调用，用于呼吸灯动画 */
+  update(dtSeconds: number): void {
+    if (!this.breathingOpts || !this.highlighted) return;
+    this.breathingTime += dtSeconds;
+    const { min, max, speed } = this.breathingOpts;
+    const t = 0.5 + 0.5 * Math.sin(this.breathingTime * Math.PI * 2 * speed);
+    const intensity = min + (max - min) * t;
+    this.applyEmissiveToHighlighted(this.highlightColor, intensity);
+  }
+
+  private applyEmissiveToHighlighted(color: THREE.Color, intensity: number): void {
+    if (!this.highlighted) return;
+    const obj = this.highlighted.object;
+    const inst = obj as unknown as THREE.InstancedMesh;
+    if (inst?.isInstancedMesh && typeof this.highlighted.instanceId === 'number' && inst.instanceColor) {
+      inst.instanceColor.setXYZ(this.highlighted.instanceId, color.r, color.g, color.b);
+      inst.instanceColor.needsUpdate = true;
+      return;
+    }
+    obj.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if ((mat as unknown as { emissive?: THREE.Color }).emissive) {
+        mat.emissive.copy(color);
+        mat.emissiveIntensity = intensity;
+        mat.needsUpdate = true;
+      }
+    });
   }
 
   clearHighlight(): void {
@@ -158,15 +204,6 @@ export class EffectManager {
   }
 
   private highlightWholeObject(obj: THREE.Object3D, color: THREE.Color, emissiveIntensity: number): void {
-    const materialUseCount = new Map<string, number>();
-    obj.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      if (Array.isArray(mesh.material)) return;
-      const key = mesh.material.uuid;
-      materialUseCount.set(key, (materialUseCount.get(key) ?? 0) + 1);
-    });
-
     obj.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -174,16 +211,12 @@ export class EffectManager {
 
       if (!this.materialSnapshots.has(mesh.uuid)) {
         const snap: MaterialSnapshot = {};
-        const currentMat = mesh.material as THREE.Material;
-        const useCount = materialUseCount.get(currentMat.uuid) ?? 1;
-        // 同一个高亮目标里，如果多个 mesh 共享材质，会造成“串亮”
-        if (useCount > 1) {
-          const original = mesh.material as THREE.Material;
-          const cloned = original.clone();
-          mesh.material = cloned;
-          snap.originalMaterial = original;
-          snap.clonedMaterial = cloned;
-        }
+        const original = mesh.material as THREE.Material;
+        const cloned = original.clone();
+        mesh.material = cloned;
+        snap.originalMaterial = original;
+        snap.clonedMaterial = cloned;
+
         const matNow = mesh.material as THREE.MeshStandardMaterial;
         if ((matNow as unknown as { emissive?: THREE.Color }).emissive) snap.emissive = matNow.emissive.clone();
         if (typeof (matNow as unknown as { emissiveIntensity?: number }).emissiveIntensity === 'number') {
@@ -194,7 +227,6 @@ export class EffectManager {
       }
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      // Non-destructive: only touch emissive/intensity (preferred)
       if ((mat as unknown as { emissive?: THREE.Color }).emissive) {
         mat.emissive.copy(color);
         mat.emissiveIntensity = emissiveIntensity;

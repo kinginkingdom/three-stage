@@ -239,6 +239,14 @@ export interface InfluenceZoneStyle {
 export interface HighlightStyle {
   color?: number;
   emissiveIntensity?: number;
+  /** 呼吸灯效果：强度在 min~max 间缓慢变化，默认开启 */
+  breathing?: boolean;
+  /** 呼吸周期（秒），默认 2 */
+  breathingSpeed?: number;
+  /** 呼吸最低强度，默认 0.12 */
+  breathingMin?: number;
+  /** 呼吸最高强度，默认 0.35 */
+  breathingMax?: number;
 }
 
 /** 预置 tip 类型，可扩展 */

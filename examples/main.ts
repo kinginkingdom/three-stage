@@ -40,6 +40,11 @@ async function run() {
   viewer.optimizeInstancing({ minCount: 2, enableInstanceColor: true });
   viewer.optimizeMerge({ groupByMaterial: true, disposeSources: false });
 
+  // 调试：打印整个场景树
+  viewer.debugPrintScene();
+  // 调试：打印所有 interact=true 的可交互对象，以及“点不到”的 mesh
+  viewer.debugPrintInteractables();
+
   // Influence zone example (dynamic overlay)
   viewer.upsertInfluenceZone(
     'zone-A',

@@ -97,7 +97,14 @@ export class PerformanceManager {
   createInstancing(root: THREE.Object3D, opts: InstancingOptions = {}): InstancingResult {
     this.assertNotDisposed();
     const minCount = opts.minCount ?? 2;
-    const filter = opts.filter ?? ((m: THREE.Mesh) => !(m instanceof THREE.SkinnedMesh));
+    const filter =
+      opts.filter ??
+      ((m: THREE.Mesh) => {
+        if (m instanceof THREE.SkinnedMesh) return false;
+        // 排除带 interact 的 mesh，实例化后无法单独点击（userData 丢失）
+        if (this.hasInteractInAncestry(m)) return false;
+        return true;
+      });
     const getKey =
       opts.getKey ??
       ((m: THREE.Mesh) => {
@@ -183,13 +190,18 @@ export class PerformanceManager {
   /**
    * 静态网格合批（减少 drawcall）
    * 默认按材质分组合并，保证渲染正确性
+   * 默认排除 userData.interact=true 的 mesh（及其子节点），避免合并后无法单独交互
    */
   mergeStatic(root: THREE.Object3D, opts: MergeOptions = {}): MergeResult {
     this.assertNotDisposed();
     const filter =
       opts.filter ??
       ((m: THREE.Mesh) => {
-        return !(m instanceof THREE.SkinnedMesh) && !(m as unknown as THREE.InstancedMesh).isInstancedMesh;
+        if (m instanceof THREE.SkinnedMesh) return false;
+        if ((m as unknown as THREE.InstancedMesh).isInstancedMesh) return false;
+        // 排除带 interact 标记的 mesh，合并后无法单独点击/高亮
+        if (this.hasInteractInAncestry(m)) return false;
+        return true;
       });
     const groupByMaterial = opts.groupByMaterial ?? true;
 
@@ -253,6 +265,15 @@ export class PerformanceManager {
     }
 
     return { created, removed };
+  }
+
+  private hasInteractInAncestry(o: THREE.Object3D): boolean {
+    let cur: THREE.Object3D | null = o;
+    while (cur) {
+      if ((cur.userData as { interact?: boolean })?.interact === true) return true;
+      cur = cur.parent;
+    }
+    return false;
   }
 
   private assertNotDisposed(): void {

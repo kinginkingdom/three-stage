@@ -1,6 +1,6 @@
 {
-  "name": "three-stage",
-  "version": "0.1.0",
+  "name": "@murmur_han/three-stage",
+  "version": "0.1.2",
   "description": "工业级 Three.js 场景封装：GLB/GLTF 加载、BVH 拾取、交互、摄像机导航、高亮、Tip 图标与 DOM 定位",
   "keywords": [
     "three",
@@ -20,11 +20,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/three-stage.git"
+    "url": "git+https://github.com/kinginkingdom/three-stage.git"
   },
-  "homepage": "https://github.com/your-org/three-stage#readme",
+  "homepage": "https://github.com/kinginkingdom/three-stage#readme",
   "bugs": {
-    "url": "https://github.com/your-org/three-stage/issues"
+    "url": "https://github.com/kinginkingdom/three-stage/issues"
   },
   "type": "module",
   "sideEffects": false,
