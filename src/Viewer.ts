@@ -17,6 +17,9 @@ import type {
   InfluenceZoneStyle,
   InteractionData,
   Unsubscribe,
+  UserDataFilter,
+  AddTipsForMeshesOptions,
+  AddTipsForMeshesResult,
 } from './types';
 import { StrictEventBus } from './core/EventBus';
 import { computeDpr, worldToScreen } from './core/utils';
@@ -224,7 +227,10 @@ export class Viewer {
     this.setState('loading');
     try {
       const { root } = await this.loader.load(url, options);
-      if (options.attachToRoot ?? true) this.root.add(root);
+      if (options.attachToRoot ?? true) {
+        this.root.add(root);
+        this.applyShadowToRoot();
+      }
       if (this.config.enableBVH) {
         const auto = this.config.bvh?.autoBuild ?? true;
         // 只有挂到 this.root（拾取范围内）才自动建 BVH
@@ -245,7 +251,10 @@ export class Viewer {
     this.setState('loading');
     try {
       const { root } = await this.loader.loadMany(assets, options);
-      if (options.attachToRoot ?? true) this.root.add(root);
+      if (options.attachToRoot ?? true) {
+        this.root.add(root);
+        this.applyShadowToRoot();
+      }
       if (this.config.enableBVH) {
         const auto = this.config.bvh?.autoBuild ?? true;
         if (auto && (options.attachToRoot ?? true)) this.enableBVHNow();
@@ -265,7 +274,10 @@ export class Viewer {
     this.setState('loading');
     try {
       const { root } = await this.loader.loadPipeline(pipeline, options);
-      if (options.attachToRoot ?? true) this.root.add(root);
+      if (options.attachToRoot ?? true) {
+        this.root.add(root);
+        this.applyShadowToRoot();
+      }
       if (this.config.enableBVH) {
         const auto = this.config.bvh?.autoBuild ?? true;
         if (auto && (options.attachToRoot ?? true)) this.enableBVHNow();
@@ -283,11 +295,13 @@ export class Viewer {
   optimizeInstancing(opts: InstancingOptions = {}): void {
     this.assertNotDisposed();
     this.optimizer.createInstancing(this.root, opts);
+    this.applyShadowToRoot();
   }
 
   optimizeMerge(opts: MergeOptions = {}): void {
     this.assertNotDisposed();
     this.optimizer.mergeStatic(this.root, opts);
+    this.applyShadowToRoot();
   }
 
   setFrustumCulling(enabled: boolean): void {
@@ -311,14 +325,30 @@ export class Viewer {
     if (!this.disposed) this.setState('idle');
   }
 
+  /**
+   * 点击 tip sprite 时解析为关联的 ground mesh，使交互行为与直接点击 ground 一致。
+   */
+  resolveInteractionTarget(hit: InteractionData | null): THREE.Object3D | null {
+    const target = hit?.intersectedObject;
+    if (!target) return null;
+    const ud = target.userData as { tipId?: string; targetUuid?: string };
+    if (!ud.tipId || !ud.targetUuid) return target;
+    let found: THREE.Object3D | null = null;
+    this.root.traverse((o) => {
+      if (o.uuid === ud.targetUuid) found = o;
+    });
+    return found ?? target;
+  }
+
   setHighlightFromInteraction(hit: InteractionData | null, style: HighlightStyle = {}): void {
     this.assertNotDisposed();
-    if (!hit?.intersectedObject) {
+    const resolved = this.resolveInteractionTarget(hit);
+    if (!resolved) {
       this.visualizer.setHighlight(null);
       return;
     }
     // 高亮范围：优先用点击对象本身（若 interact=true），否则找最近的 interact 祖先
-    let obj: THREE.Object3D = hit.intersectedObject;
+    let obj: THREE.Object3D = resolved;
     if ((obj.userData as { interact?: boolean })?.interact === true) {
       // 点击对象本身即 interact 层，无需再往上找
     } else {
@@ -331,8 +361,8 @@ export class Viewer {
         cur = cur.parent;
       }
       // 兼容：若未找到 interact，再尝试 highlightRoot
-      if (obj === hit.intersectedObject) {
-        cur = hit.intersectedObject;
+      if (obj === resolved) {
+        cur = resolved;
         while (cur) {
           if ((cur.userData as { highlightRoot?: boolean })?.highlightRoot) {
             obj = cur;
@@ -342,7 +372,7 @@ export class Viewer {
         }
       }
     }
-    this.visualizer.setHighlight({ object: obj, instanceId: hit.instanceId }, style);
+    this.visualizer.setHighlight({ object: obj, instanceId: hit?.instanceId }, style);
   }
 
   setHighlightObject(obj: THREE.Object3D | null, style: HighlightStyle = {}): void {
@@ -374,6 +404,96 @@ export class Viewer {
     return worldToScreen(this.camera, this.config.canvas, target);
   }
 
+  /**
+   * 为匹配 userData 的可交互 mesh 在其上方添加 tip sprite。
+   * @param filter 筛选条件，如 (o) => String((o.userData as any).name || '').includes('ground')
+   * @param opts 贴图、尺寸、是否可点击等
+   */
+  addTipsForMeshes(
+    filter: UserDataFilter | ((obj: THREE.Object3D) => boolean),
+    opts: AddTipsForMeshesOptions,
+  ): AddTipsForMeshesResult {
+    this.assertNotDisposed();
+    const match =
+      typeof filter === 'function'
+        ? filter
+        : (obj: THREE.Object3D) => {
+            const ud = obj.userData as Record<string, unknown>;
+            const f = filter as Record<string, unknown>;
+            for (const k of Object.keys(f)) {
+              if (ud[k] !== f[k]) return false;
+            }
+            return Object.keys(f).length > 0;
+          };
+    const tipIds: string[] = [];
+    const targetMap = new Map<string, THREE.Object3D>();
+    const offset = opts.offset ?? 0.5;
+    let idx = 0;
+
+    this.root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (opts.interactableOnly && !this.hasInteractInAncestry(o)) return;
+      if (!match(o)) return;
+
+      const box = new THREE.Box3().setFromObject(mesh);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      const pos: [number, number, number] = [
+        center.x,
+        box.max.y + offset,
+        center.z,
+      ];
+
+      const id = `tip-mesh-${idx++}`;
+      const mergedUserData: Record<string, unknown> = { targetUuid: mesh.uuid };
+      let cur: THREE.Object3D | null = mesh;
+      while (cur) {
+        Object.assign(mergedUserData, cur.userData);
+        cur = cur.parent;
+      }
+      const tipOpts: Parameters<typeof this.tips.addTipSync>[2] = {
+        textureUrl: opts.textureUrl,
+        size: opts.size ?? (opts.sizeAttenuation === false ? 48 : 0.4),
+        interact: opts.interact ?? true,
+        userData: mergedUserData,
+      };
+      if (opts.sizeAttenuation !== undefined) tipOpts.sizeAttenuation = opts.sizeAttenuation;
+      this.tips.addTipSync(id, pos, tipOpts);
+      tipIds.push(id);
+      targetMap.set(id, mesh);
+    });
+
+    return { tipIds, targetMap };
+  }
+
+  /**
+   * 按 userData 条件批量设置对象显隐。
+   * @param filter 筛选条件：{ type: 'pipe' } 或 (obj) => userData.type === 'pipe'
+   * @param visible 是否显示
+   * @returns 被设置的对象数量
+   */
+  setVisibilityByUserData(filter: UserDataFilter, visible: boolean): number {
+    this.assertNotDisposed();
+    const match = typeof filter === 'function'
+      ? filter
+      : (obj: THREE.Object3D) => {
+          const ud = obj.userData as Record<string, unknown>;
+          for (const k of Object.keys(filter)) {
+            if (ud[k] !== (filter as Record<string, unknown>)[k]) return false;
+          }
+          return Object.keys(filter).length > 0;
+        };
+    let count = 0;
+    this.root.traverse((o) => {
+      if (match(o)) {
+        o.visible = visible;
+        count += 1;
+      }
+    });
+    return count;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -401,6 +521,8 @@ export class Viewer {
       if (this.disposed) return;
       const dt = Math.max(0, (t - this.lastT) / 1000);
       this.lastT = t;
+
+      this.events.emit('frame', { dt, t });
 
       // 简单自适应：低帧持续则关阴影，高帧持续则开阴影（仅在 shadows=auto 时生效）
       this.updateShadowAuto(t, dt);
@@ -485,14 +607,18 @@ export class Viewer {
     this.shadowsEnabled = enabled;
     this.renderer.shadowMap.enabled = enabled;
     if (enabled) this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    // 默认：接收阴影即可；是否投射阴影一般由资产/业务决定（避免全场 cast 导致成本暴涨）
+    this.applyShadowToRoot();
+    if (this.shadowCatcher) this.shadowCatcher.visible = enabled;
+  }
+
+  /** 对 root 下所有 mesh 应用阴影设置，load/optimize 后需调用以覆盖新加入的 mesh */
+  private applyShadowToRoot(): void {
     this.root.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
-      mesh.receiveShadow = enabled;
-      if (!enabled) mesh.castShadow = false;
+      mesh.receiveShadow = this.shadowsEnabled;
+      mesh.castShadow = this.shadowsEnabled; // 模型投射阴影到地面
     });
-    if (this.shadowCatcher) this.shadowCatcher.visible = enabled;
   }
 
   private shouldEnableShadowsByHardware(): boolean {
@@ -545,6 +671,15 @@ export class Viewer {
     const prev = this.state;
     this.state = next;
     if (prev !== next) this.events.emit('state-change', { prev, next });
+  }
+
+  private hasInteractInAncestry(o: THREE.Object3D): boolean {
+    let cur: THREE.Object3D | null = o;
+    while (cur) {
+      if ((cur.userData as { interact?: boolean })?.interact === true) return true;
+      cur = cur.parent;
+    }
+    return false;
   }
 
   private assertNotDisposed(): void {

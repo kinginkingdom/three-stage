@@ -22,6 +22,7 @@ export interface EventBus<TEvents extends EventMap> {
 
 export interface ViewerEvents extends EventMap {
   'state-change': { prev: ViewerState; next: ViewerState };
+  'frame': { dt: number; t: number };
   'load-start': { requestId: string };
   'load-progress': LoaderProgress;
   'load-complete': { requestId: string; root: THREE.Group };
@@ -195,11 +196,19 @@ export interface InstancingOptions {
   getKey?: (mesh: THREE.Mesh) => string;
   /** Filter which meshes can be instanced. */
   filter?: (mesh: THREE.Mesh) => boolean;
+  /** 排除自身或祖先 userData 匹配的对象，如 { type: 'pipe' } 不参与实例化 */
+  excludeUserData?: Record<string, unknown>;
+  /** 排除满足条件的 mesh（如 name 包含 ground），与 excludeUserData 二选一 */
+  excludeFilter?: (obj: THREE.Object3D) => boolean;
 }
 
 export interface MergeOptions {
   /** Merge only these meshes (if provided). */
   filter?: (mesh: THREE.Mesh) => boolean;
+  /** 排除自身或祖先 userData 匹配的对象，如 { type: 'pipe' } 不参与合并 */
+  excludeUserData?: Record<string, unknown>;
+  /** 排除满足条件的 mesh（如 name 包含 ground），与 excludeUserData 二选一 */
+  excludeFilter?: (obj: THREE.Object3D) => boolean;
   /** Merge by material to preserve batching correctness. Defaults to true. */
   groupByMaterial?: boolean;
   /** If true, disposes geometries of merged sources. */
@@ -210,6 +219,8 @@ export interface FocusOptions {
   durationMs?: number;
   /** Extra padding factor around the bounding sphere radius. Defaults to 1.2. */
   padding?: number;
+  /** 最小包围球半径（世界单位），用于 Sprite 等小物体避免镜头过近，默认 2 */
+  minRadius?: number;
   /** If true, also moves OrbitControls target. */
   setOrbitTarget?: boolean;
 }
@@ -259,8 +270,12 @@ export interface TipOptions {
   textureUrl?: string;
   /** 自定义贴图实例（最高优先级） */
   texture?: THREE.Texture;
-  /** Sprite 尺寸（世界单位，默认 0.5） */
+  /** Sprite 尺寸：sizeAttenuation 为 true 时是世界单位，false 时是像素，默认 0.5 */
   size?: number;
+  /** 是否随距离衰减尺寸（false 则固定像素大小，更易见且 hit 区域稳定），默认 true */
+  sizeAttenuation?: boolean;
+  /** 是否参与 raycast 点击/hover，默认 true */
+  interact?: boolean;
   /** 自定义 userData，便于点击时识别设备 */
   userData?: Record<string, unknown>;
 }
@@ -273,5 +288,29 @@ export interface WorldToScreenResult {
   x: number;
   y: number;
   visible: boolean;
+}
+
+/**
+ * 按 userData 筛选对象的条件：
+ * - 对象形式 { type: 'pipe' }：匹配 userData 中所有键值对完全一致
+ * - 函数形式：(obj) => boolean：自定义谓词
+ */
+export type UserDataFilter =
+  | Record<string, unknown>
+  | ((obj: THREE.Object3D) => boolean);
+
+export interface AddTipsForMeshesOptions extends Omit<TipOptions, 'texture' | 'userData'> {
+  /** 贴图 URL，必填 */
+  textureUrl: string;
+  /** 对象上方偏移（世界单位），默认 0.5 */
+  offset?: number;
+  /** 仅对 userData.interact 为 true 的 mesh 添加（或其祖先有 interact） */
+  interactableOnly?: boolean;
+}
+
+export interface AddTipsForMeshesResult {
+  tipIds: string[];
+  /** tipId -> 关联的 Object3D（用于 DOM 弹框 worldToScreen 定位） */
+  targetMap: Map<string, THREE.Object3D>;
 }
 

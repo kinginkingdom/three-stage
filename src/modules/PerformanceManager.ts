@@ -101,8 +101,9 @@ export class PerformanceManager {
       opts.filter ??
       ((m: THREE.Mesh) => {
         if (m instanceof THREE.SkinnedMesh) return false;
-        // 排除带 interact 的 mesh，实例化后无法单独点击（userData 丢失）
         if (this.hasInteractInAncestry(m)) return false;
+        if (opts.excludeUserData && this.hasUserDataInAncestry(m, opts.excludeUserData)) return false;
+        if (opts.excludeFilter && this.hasFilterMatchInAncestry(m, opts.excludeFilter)) return false;
         return true;
       });
     const getKey =
@@ -199,8 +200,9 @@ export class PerformanceManager {
       ((m: THREE.Mesh) => {
         if (m instanceof THREE.SkinnedMesh) return false;
         if ((m as unknown as THREE.InstancedMesh).isInstancedMesh) return false;
-        // 排除带 interact 标记的 mesh，合并后无法单独点击/高亮
         if (this.hasInteractInAncestry(m)) return false;
+        if (opts.excludeUserData && this.hasUserDataInAncestry(m, opts.excludeUserData)) return false;
+        if (opts.excludeFilter && this.hasFilterMatchInAncestry(m, opts.excludeFilter)) return false;
         return true;
       });
     const groupByMaterial = opts.groupByMaterial ?? true;
@@ -217,7 +219,10 @@ export class PerformanceManager {
 
     const buckets = new Map<string, THREE.Mesh[]>();
     for (const m of meshes) {
-      const key = groupByMaterial ? (m.material as THREE.Material).uuid : 'all';
+      const attrSig = this.getAttributeSignature(m.geometry);
+      const key = groupByMaterial
+        ? `${(m.material as THREE.Material).uuid}::${attrSig}`
+        : attrSig;
       const list = buckets.get(key) ?? [];
       list.push(m);
       buckets.set(key, list);
@@ -267,10 +272,43 @@ export class PerformanceManager {
     return { created, removed };
   }
 
+  /** 几何体属性签名，用于 mergeGeometries 前分组：只有属性完全一致且 index 状态相同的才能合并 */
+  private getAttributeSignature(geom: THREE.BufferGeometry): string {
+    const attrs = Object.keys(geom.attributes).sort().join(',');
+    const indexed = geom.index !== null ? 'i' : 'n';
+    return `${indexed}:${attrs}`;
+  }
+
   private hasInteractInAncestry(o: THREE.Object3D): boolean {
     let cur: THREE.Object3D | null = o;
     while (cur) {
       if ((cur.userData as { interact?: boolean })?.interact === true) return true;
+      cur = cur.parent;
+    }
+    return false;
+  }
+
+  private hasUserDataInAncestry(o: THREE.Object3D, filter: Record<string, unknown>): boolean {
+    let cur: THREE.Object3D | null = o;
+    while (cur) {
+      const ud = cur.userData as Record<string, unknown>;
+      let match = true;
+      for (const k of Object.keys(filter)) {
+        if (ud[k] !== filter[k]) {
+          match = false;
+          break;
+        }
+      }
+      if (match && Object.keys(filter).length > 0) return true;
+      cur = cur.parent;
+    }
+    return false;
+  }
+
+  private hasFilterMatchInAncestry(o: THREE.Object3D, filter: (obj: THREE.Object3D) => boolean): boolean {
+    let cur: THREE.Object3D | null = o;
+    while (cur) {
+      if (filter(cur)) return true;
       cur = cur.parent;
     }
     return false;

@@ -43,18 +43,20 @@ export class TipManager {
     const texture = await this.resolveTexture(opts);
     const size = opts.size ?? this.config.defaultSize ?? DEFAULT_SIZE;
 
+    const sizeAttenuation = opts.sizeAttenuation ?? true;
     const material = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,
-      depthTest: true,
+      depthTest: false,
       depthWrite: false,
+      sizeAttenuation,
     });
     const sprite = new THREE.Sprite(material);
     sprite.position.set(position[0], position[1], position[2]);
     sprite.scale.set(size, size, 1);
     sprite.name = `tip:${id}`;
     sprite.userData = { tipId: id, ...opts.userData };
-    sprite.userData.interact = true;
+    if (opts.interact !== false) (sprite.userData as Record<string, unknown>).interact = true;
 
     this.group.add(sprite);
     this.tips.set(id, sprite);
@@ -67,19 +69,21 @@ export class TipManager {
     this.removeTip(id);
 
     const size = opts.size ?? this.config.defaultSize ?? DEFAULT_SIZE;
+    const sizeAttenuation = opts.sizeAttenuation ?? true;
     const placeholder = this.createPlaceholderTexture();
     const material = new THREE.SpriteMaterial({
       map: placeholder,
       transparent: true,
-      depthTest: true,
+      depthTest: false,
       depthWrite: false,
+      sizeAttenuation,
     });
     const sprite = new THREE.Sprite(material);
     sprite.position.set(position[0], position[1], position[2]);
     sprite.scale.set(size, size, 1);
     sprite.name = `tip:${id}`;
     sprite.userData = { tipId: id, ...opts.userData };
-    (sprite.userData as Record<string, unknown>).interact = true;
+    if (opts.interact !== false) (sprite.userData as Record<string, unknown>).interact = true;
 
     this.group.add(sprite);
     this.tips.set(id, sprite);

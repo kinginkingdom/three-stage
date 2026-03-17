@@ -48,10 +48,12 @@ export class CameraController {
     this.assertNotDisposed();
     const durationMs = opts.durationMs ?? 650;
     const padding = opts.padding ?? 1.2;
+    const minRadius = opts.minRadius ?? 2;
 
     const box = new THREE.Box3().setFromObject(target);
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
+    if (sphere.radius < minRadius) sphere.radius = minRadius;
 
     const cam = this.cfg.camera;
     const fromPos = cam.position.clone();

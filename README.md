@@ -20,7 +20,12 @@
 - **高亮 & 可视化**：
   - 非破坏性高亮：优先改 emissive，必要时对共享材质做克隆，避免“串亮”。
   - `userData.highlightRoot = true` 支持“整柜/整设备”整体高亮。
+  - 呼吸灯高亮（可配置强度、周期）。
   - 影响区域（球/盒）可视化（半透明体 + Edges 边线）。
+- **按 userData 显隐**：`setVisibilityByUserData({ type: 'pipe' }, false)` 批量控制对象显隐。
+- **Tip Sprite & 巡检**：
+  - `addTipsForMeshes` 为 mesh 上方批量添加 Sprite，支持 `resolveInteractionTarget` 使点击 tip 等同于点击关联 mesh。
+  - 巡检：以设备列表循环聚焦（上一站/下一站/恢复）。
 - **状态 & 事件总线**：`StrictEventBus` 驱动，解耦 Loader / Interactor / Navigator / EffectManager。
 
 ## 安装
@@ -159,8 +164,10 @@ export interface BVHOptions {
 
 - `viewer.optimizeInstancing(opts?: InstancingOptions)`
   - 对重复网格自动分桶，生成 `THREE.InstancedMesh`，并可选创建 `instanceColor` 以支持“单实例高亮”。
+  - `excludeUserData: { type: 'pipe' }` 排除指定 userData 的对象；`excludeFilter: (o) => ...` 排除满足条件的 mesh。
 - `viewer.optimizeMerge(opts?: MergeOptions)`
-  - 对静态网格按材质合批（`mergeGeometries`），降低 draw call 数量。
+  - 对静态网格按材质分组合并（`mergeGeometries`），仅合并属性签名一致的几何体。
+  - 同样支持 `excludeUserData`、`excludeFilter`。
 - `viewer.setFrustumCulling(enabled: boolean)`
   - 一键开关整个 `root` 子树的 frustumCulling 标志。
 - `viewer.enableBVHNow()`
@@ -182,6 +189,10 @@ viewer.on('state-change', ({ prev, next }) => {
 viewer.on('load-progress', (p) => {
   // { requestId, url, loaded, total, ratio, phase }
 });
+
+viewer.on('frame', ({ dt, t }) => {
+  // 每帧回调，用于 DOM 弹框位置更新等
+});
 ```
 
 防误触逻辑：
@@ -200,10 +211,11 @@ viewer.on('load-progress', (p) => {
 await viewer.focus(targetObject, {
   durationMs: 650,
   padding: 1.4,
+  minRadius: 2,  // Sprite 等小物体避免镜头过近
   setOrbitTarget: true,
 });
 
-// 巡检路径
+// 巡检路径（相机沿曲线移动）
 viewer.startRoaming(
   [
     { position: [0, 2, 8] },
@@ -215,6 +227,28 @@ viewer.startRoaming(
 ```
 
 内部使用 GSAP 做摄像机动画（可中断、可复用）。
+
+### 设备巡检（聚焦循环）
+
+以设备列表循环聚焦：上一站 → 下一站 → 恢复（整场景）。示例：
+
+```ts
+const { tipIds, targetMap } = viewer.addTipsForMeshes(filter, opts);
+const targets = tipIds.map((id) => targetMap.get(id)).filter(Boolean);
+
+// 上一站 / 下一站：viewer.focus(targets[index])
+// 恢复：viewer.focus(root)
+```
+
+## 按 userData 显隐
+
+```ts
+// 隐藏 userData.type === 'pipe' 的对象
+viewer.setVisibilityByUserData({ type: 'pipe' }, false);
+
+// 自定义谓词
+viewer.setVisibilityByUserData((o) => String(o.userData?.name ?? '').includes('ground'), true);
+```
 
 ## 高亮与影响区域
 
@@ -267,19 +301,37 @@ viewer.upsertInfluenceZone(
 
 ## Tip 图标与 worldToScreen
 
-### TipManager（Sprite 图标）
+### addTipsForMeshes（批量添加）
 
-在设备 3D 位置创建可点击的 Sprite 图标（摄像头、传感器、人员等）：
+为匹配 userData 的 mesh 在其上方批量添加 Sprite，点击 tip 时通过 `resolveInteractionTarget` 解析为关联 mesh，交互行为与直接点击 mesh 一致：
 
 ```ts
-// 预注册类型贴图（可选）
-viewer.tips.registerTexture('camera', '/icons/camera.png');
-viewer.tips.registerTexture('sensor', '/icons/sensor.png');
+const { tipIds, targetMap } = viewer.addTipsForMeshes(
+  (o) => String(o.userData?.name ?? '').includes('ground'),
+  { textureUrl: '/icons/pos.png', size: 48, sizeAttenuation: false, offset: 0.3 },
+);
 
-// 同步添加（占位图，贴图加载后自动更新）
+// 点击 tip 时解析为 ground mesh
+viewer.on('object-click', (hit) => {
+  const target = viewer.resolveInteractionTarget(hit);
+  if (target) viewer.focus(target);
+});
+```
+
+需用 `excludeFilter` 排除 ground 参与 merge，否则 mesh 被合并后无法解析。
+
+### TipManager（Sprite 图标）
+
+在设备 3D 位置创建可点击的 Sprite 图标：
+
+```ts
+viewer.tips.registerTexture('camera', '/icons/camera.png');
+
 viewer.tips.addTipSync('cam-1', [1, 2, 3], {
   type: 'camera',
   size: 0.4,
+  sizeAttenuation: false,  // 固定像素大小
+  interact: true,
   userData: { deviceId: 'cam-1', name: '入口摄像头' },
 });
 

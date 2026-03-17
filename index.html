@@ -39,6 +39,41 @@
         padding: 2px 6px;
         border-radius: 6px;
       }
+      button {
+        margin-left: auto;
+        padding: 6px 12px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        color: inherit;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      button:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .tip-popup {
+        position: fixed;
+        left: 0;
+        top: 0;
+        transform: translate(-50%, -100%);
+        margin-top: -8px;
+        padding: 8px 12px;
+        background: rgba(11, 16, 32, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        font-size: 13px;
+        pointer-events: none;
+        z-index: 100;
+        min-width: 100px;
+      }
+      .tip-popup .label {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 11px;
+      }
+      .tip-popup .value {
+        margin-top: 2px;
+      }
     </style>
   </head>
   <body>
@@ -46,8 +81,15 @@
       <header>
         <strong>three-stage</strong>
         <small>Click objects to highlight. Replace <code>MODEL_URL</code> in <code>examples/main.ts</code>.</small>
+        <button id="toggle-pipe" type="button">管道 显示</button>
+        <span style="margin-left: 12px; opacity: 0.7;">巡检:</span>
+        <button id="inspect-prev" type="button">上一站</button>
+        <button id="inspect-next" type="button">下一站</button>
+        <button id="inspect-restore" type="button">恢复</button>
+        <small id="inspect-info" style="margin-left: 8px;">0/0</small>
       </header>
       <canvas id="c"></canvas>
+      <div id="tip-popups"></div>
     </div>
     <script type="module" src="/examples/main.ts"></script>
   </body>
