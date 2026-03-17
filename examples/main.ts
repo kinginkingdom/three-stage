@@ -19,6 +19,7 @@ const viewer = new Viewer({
   lighting: {
     shadows: 'auto',
     shadowCatcher: true,
+    shadowCameraSize: 120,  // 大场景时调大，避免阴影出现方形裁切
     extraDirections: [
       { position: [0, 15, 0], intensity: 0.8 },           // 顶光
       { position: [8, 8, 8], intensity: 0.6 },           // 平行光1：左前上
@@ -103,7 +104,7 @@ async function run() {
       size: 0.05,
       sizeAttenuation: false,
       interact: true,
-      offset: 0.5,
+      offset: 2.5,
     },
   );
   console.debug(`[tips] added ${tipIds.length} tips for ground meshes`);
@@ -146,6 +147,14 @@ async function run() {
   });
   updateInspectInfo();
 
+  // 预设视角切换
+  const viewPresets = ['front', 'top', 'topLeft', 'topRight'] as const;
+  viewPresets.forEach((preset) => {
+    document.getElementById(`view-${preset}`)?.addEventListener('click', () => {
+      viewer.setView(preset, { animate: true, durationMs: 400 });
+    });
+  });
+
   // 常驻 DOM 弹框：每个 tip 一个，显示 curName 等
   const popups: { el: HTMLElement; sprite: THREE.Sprite }[] = [];
   tipIds.forEach((id) => {
@@ -156,16 +165,16 @@ async function run() {
     el.dataset.tipId = id;
     const ud = sprite.userData as Record<string, unknown>;
     el.innerHTML = `
-      <div class="label">curName</div>
+      <!-- <div class="label">curName</div> -->
       <div class="value">${String(ud.curName ?? '-')}</div>
-      <div class="label">name</div>
-      <div class="value">${String(ud.name ?? '-')}</div>
+      <!-- <div class="label">name</div> -->
+      <!-- <div class="value">${String(ud.name ?? '-')}</div> -->
     `;
     if (tipPopupsContainer) tipPopupsContainer.appendChild(el);
     popups.push({ el, sprite });
   });
 
-  // 每帧更新所有 tip 弹框位置（相机移动时跟随）
+  // 每帧更新所有 tip 弹框位置（用 transform 保留亚像素精度，减少拖拽时抖动）
   viewer.on('frame', () => {
     const rect = viewer.renderer.domElement.getBoundingClientRect();
     popups.forEach(({ el, sprite }) => {
@@ -179,8 +188,9 @@ async function run() {
         return;
       }
       el.style.display = 'block';
-      el.style.left = `${rect.left + x}px`;
-      el.style.top = `${rect.top + y}px`;
+      el.style.left = `${rect.left}px`;
+      el.style.top = `${rect.top}px`;
+      el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     });
   });
 

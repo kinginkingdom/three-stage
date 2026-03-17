@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gsap } from 'gsap';
-import type { FocusOptions, RoamOptions, RoamPathPoint } from '../types';
+import type { FocusOptions, RoamOptions, RoamPathPoint, ViewPreset, SetViewOptions } from '../types';
 
 export interface CameraControllerConfig {
   canvas: HTMLCanvasElement;
@@ -134,6 +134,70 @@ export class CameraController {
   stopRoaming(): void {
     this.roamingTween?.kill();
     this.roamingTween = null;
+  }
+
+  /** 预设视角方向（单位向量），相机位置 = target + dir * distance */
+  private static readonly VIEW_DIRS: Record<ViewPreset, [number, number, number]> = {
+    front: [0, 0, 1],
+    back: [0, 0, -1],
+    top: [0, 1, 0],
+    bottom: [0, -1, 0],
+    left: [-1, 0, 0],
+    right: [1, 0, 0],
+    topLeft: [-0.577, 0.577, 0.577],
+    topRight: [0.577, 0.577, 0.577],
+    bottomLeft: [-0.577, -0.577, 0.577],
+    bottomRight: [0.577, -0.577, 0.577],
+  };
+
+  setView(preset: ViewPreset, opts: SetViewOptions = {}): Promise<void> {
+    this.assertNotDisposed();
+    const cam = this.cfg.camera;
+    const targetVec = new THREE.Vector3(
+      opts.target?.[0] ?? this.controls?.target.x ?? 0,
+      opts.target?.[1] ?? this.controls?.target.y ?? 0,
+      opts.target?.[2] ?? this.controls?.target.z ?? 0,
+    );
+    const dir = CameraController.VIEW_DIRS[preset];
+    const dirVec = new THREE.Vector3(dir[0], dir[1], dir[2]).normalize();
+    const distance = opts.distance ?? cam.position.distanceTo(targetVec);
+    const toPos = targetVec.clone().add(dirVec.multiplyScalar(distance));
+    const animate = opts.animate !== false;
+    const durationMs = opts.durationMs ?? 400;
+
+    if (!animate) {
+      cam.position.copy(toPos);
+      cam.lookAt(targetVec);
+      if (this.controls) {
+        this.controls.target.copy(targetVec);
+        this.controls.update();
+      }
+      return Promise.resolve();
+    }
+
+    this.focusTween?.kill();
+    const fromPos = cam.position.clone();
+    const fromLookAt = this.getLookAt();
+    const p = { t: 0 };
+    return new Promise((resolve) => {
+      this.focusTween = gsap.to(p, {
+        t: 1,
+        duration: durationMs / 1000,
+        ease: 'power2.inOut',
+        onUpdate: () => {
+          const t = p.t;
+          cam.position.lerpVectors(fromPos, toPos, t);
+          const lookAt = fromLookAt.clone().lerp(targetVec, t);
+          cam.lookAt(lookAt);
+          if (this.controls) {
+            this.controls.target.copy(lookAt);
+            this.controls.update();
+          }
+        },
+        onComplete: () => resolve(),
+        onInterrupt: () => resolve(),
+      });
+    });
   }
 
   private getLookAt(): THREE.Vector3 {

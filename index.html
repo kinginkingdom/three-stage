@@ -66,6 +66,7 @@
         pointer-events: none;
         z-index: 100;
         min-width: 100px;
+        will-change: transform;
       }
       .tip-popup .label {
         color: rgba(255, 255, 255, 0.6);
@@ -87,6 +88,11 @@
         <button id="inspect-next" type="button">下一站</button>
         <button id="inspect-restore" type="button">恢复</button>
         <small id="inspect-info" style="margin-left: 8px;">0/0</small>
+        <span style="margin-left: 12px; opacity: 0.7;">视角:</span>
+        <button id="view-front" type="button">前</button>
+        <button id="view-top" type="button">上</button>
+        <button id="view-topLeft" type="button">左上</button>
+        <button id="view-topRight" type="button">右上</button>
       </header>
       <canvas id="c"></canvas>
       <div id="tip-popups"></div>

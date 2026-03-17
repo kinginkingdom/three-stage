@@ -63,6 +63,11 @@ export interface ViewerConfig {
   optimizer?: OptimizerOptions;
   /** Tip 图标管理配置（Sprite 贴图注册表等） */
   tips?: { textureRegistry?: TipTextureRegistry; defaultSize?: number };
+  /** 初始相机视角，未设置时默认 position [3,2,5] target [0,0,0] */
+  initialCamera?: {
+    position?: [number, number, number];
+    target?: [number, number, number];
+  };
 }
 
 export interface LightingOptions {
@@ -74,6 +79,12 @@ export interface LightingOptions {
   shadows?: boolean | 'auto';
   /** 阴影贴图尺寸（默认 1024） */
   shadowMapSize?: 512 | 1024 | 2048;
+  /** 阴影相机视锥范围（世界单位），场景大时需调大，默认 ±80 即 160x160 */
+  shadowCameraSize?: number;
+  /** 阴影相机 far，默认 300 */
+  shadowCameraFar?: number;
+  /** 阴影 normalBias，缓解条纹状 shadow acne，默认 0.02 */
+  shadowNormalBias?: number;
   /** 是否添加阴影接收地面（默认 true） */
   shadowCatcher?: boolean;
   /** 阴影接收地面透明度（默认 0.18） */
@@ -213,6 +224,30 @@ export interface MergeOptions {
   groupByMaterial?: boolean;
   /** If true, disposes geometries of merged sources. */
   disposeSources?: boolean;
+}
+
+/** 预设视角：前/后/上/下/左/右，以及左上/右上/左下/右下（斜 45°） */
+export type ViewPreset =
+  | 'front'
+  | 'back'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | 'topLeft'
+  | 'topRight'
+  | 'bottomLeft'
+  | 'bottomRight';
+
+export interface SetViewOptions {
+  /** 观察目标点，默认使用当前 OrbitControls target */
+  target?: [number, number, number];
+  /** 相机到目标的距离，默认保持当前距离 */
+  distance?: number;
+  /** 是否动画过渡，默认 true */
+  animate?: boolean;
+  /** 动画时长（毫秒），默认 400 */
+  durationMs?: number;
 }
 
 export interface FocusOptions {

@@ -11,6 +11,8 @@ import type {
   MergeOptions,
   FocusOptions,
   RoamOptions,
+  ViewPreset,
+  SetViewOptions,
   RoamPathPoint,
   HighlightStyle,
   InfluenceZoneShape,
@@ -68,7 +70,14 @@ export class Viewer {
 
     const rect = config.canvas.getBoundingClientRect();
     this.camera = new THREE.PerspectiveCamera(50, rect.width / Math.max(1, rect.height), 0.1, 2000);
-    this.camera.position.set(3, 2, 5);
+    const initCam = config.initialCamera;
+    this.camera.position.set(
+      initCam?.position?.[0] ?? 3,
+      initCam?.position?.[1] ?? 2,
+      initCam?.position?.[2] ?? 5,
+    );
+    const target = initCam?.target ?? [0, 0, 0];
+    this.camera.lookAt(target[0], target[1], target[2]);
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: config.canvas,
@@ -100,6 +109,9 @@ export class Viewer {
       enableOrbitControls: config.enableOrbitControls ?? true,
       enableRoaming: config.enableRoaming ?? false,
     });
+    if (this.navigator.controls && initCam?.target) {
+      this.navigator.controls.target.set(target[0], target[1], target[2]);
+    }
 
     this.visualizer = new EffectManager();
 
@@ -312,6 +324,14 @@ export class Viewer {
   async focus(target: THREE.Object3D, opts: FocusOptions = {}): Promise<void> {
     this.assertNotDisposed();
     await this.navigator.focusOnObject(target, opts);
+  }
+
+  /**
+   * 切换到预设视角（前/后/上/下/左/右/左上/右上/左下/右下）
+   */
+  setView(preset: ViewPreset, opts: SetViewOptions = {}): Promise<void> {
+    this.assertNotDisposed();
+    return this.navigator.setView(preset, opts);
   }
 
   startRoaming(points: ReadonlyArray<RoamPathPoint>, opts: RoamOptions): void {
@@ -562,17 +582,20 @@ export class Viewer {
     const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, hemiIntensity);
     this.scene.add(hemi);
     const dir = new THREE.DirectionalLight(0xffffff, dirIntensity);
-    dir.position.set(5, 8, 6);
+    dir.position.set(18, 18, 6);
     dir.castShadow = true;
     dir.shadow.bias = -0.00005;
+    dir.shadow.normalBias = lighting.shadowNormalBias ?? 0.02;
     const mapSize = lighting.shadowMapSize ?? 1024;
     dir.shadow.mapSize.set(mapSize, mapSize);
+    const shadowSize = lighting.shadowCameraSize ?? 80;
+    const shadowFar = lighting.shadowCameraFar ?? 300;
     dir.shadow.camera.near = 0.5;
-    dir.shadow.camera.far = 80;
-    dir.shadow.camera.left = -20;
-    dir.shadow.camera.right = 20;
-    dir.shadow.camera.top = 20;
-    dir.shadow.camera.bottom = -20;
+    dir.shadow.camera.far = shadowFar;
+    dir.shadow.camera.left = -shadowSize;
+    dir.shadow.camera.right = shadowSize;
+    dir.shadow.camera.top = shadowSize;
+    dir.shadow.camera.bottom = -shadowSize;
     this.scene.add(dir);
 
     // 额外方向光（可从右/后/顶等多方向补光）

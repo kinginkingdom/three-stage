@@ -116,8 +116,25 @@ export class TipManager {
     const sprite = this.tips.get(id);
     if (!sprite) return;
     if (position) sprite.position.set(position[0], position[1], position[2]);
-    if (opts?.size) sprite.scale.setScalar(opts.size);
+    if (opts?.size !== undefined) sprite.scale.setScalar(opts.size);
+    if (opts?.sizeAttenuation !== undefined) {
+      (sprite.material as THREE.SpriteMaterial).sizeAttenuation = opts.sizeAttenuation;
+    }
     if (opts?.userData) Object.assign(sprite.userData, opts.userData);
+    // 更新贴图：textureUrl / texture / type 任一提供时
+    if (opts && (opts.textureUrl != null || opts.texture != null || opts.type != null)) {
+      this.resolveTexture(opts as TipOptions).then((tex) => {
+        if (this.disposed || !this.tips.has(id)) return;
+        const s = this.tips.get(id);
+        if (s) {
+          const mat = s.material as THREE.SpriteMaterial;
+          const old = mat.map;
+          mat.map = tex;
+          mat.needsUpdate = true;
+          if (old && old !== tex) old.dispose();
+        }
+      });
+    }
   }
 
   getTip(id: string): THREE.Sprite | undefined {
