@@ -27,6 +27,10 @@ const viewer = new Viewer({
     ],
   },
   optimizer: { frustumCulling: true, keepOriginals: false },
+  initialCamera: {
+    position: [15.6, 110.3, 91.4],
+    target: [15.6, -1.79, 2.25],
+  },
 });
 
 viewer.on('load-progress', (p) => {
@@ -101,8 +105,8 @@ async function run() {
     hasGroundInAncestry, // 复用上面的 filter
     {
       textureUrl: '/icons/pos.png',
-      size: 0.05,
-      sizeAttenuation: false,
+      size: 1,
+      sizeAttenuation: true,
       interact: true,
       offset: 2.5,
     },
@@ -136,8 +140,10 @@ async function run() {
   });
   document.getElementById('inspect-next')?.addEventListener('click', () => {
     if (inspectTargets.length === 0) return;
-    inspectIndex = (inspectIndex + 1) % inspectTargets.length;
-    focusInspectTarget(inspectIndex);
+    // setInterval(() => {
+      inspectIndex = (inspectIndex + 1) % inspectTargets.length;
+      focusInspectTarget(inspectIndex);
+    // }, 5000);
   });
   document.getElementById('inspect-restore')?.addEventListener('click', () => {
     inspectIndex = -1;
@@ -195,7 +201,7 @@ async function run() {
   });
 
   // Optional: focus whole loaded root at start
-  await viewer.focus(root, { durationMs: 700, padding: 1.6 });
+  // await viewer.focus(root, { durationMs: 700, padding: 1.6 });
 }
 
 run().catch((e) => console.error(e));

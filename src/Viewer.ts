@@ -15,6 +15,7 @@ import type {
   SetViewOptions,
   RoamPathPoint,
   HighlightStyle,
+  FoundMesh,
   InfluenceZoneShape,
   InfluenceZoneStyle,
   InteractionData,
@@ -321,6 +322,45 @@ export class Viewer {
     this.optimizer.setFrustumCulling(this.root, enabled);
   }
 
+  /**
+   * 查找满足条件的 mesh 列表，可用于批量加 tip / 巡检 / 统计等。
+   * @param filter userData 过滤条件对象或自定义函数
+   * @param opts.interactableOnly 若为 true，仅返回祖先链上带 interact=true 的 mesh
+   */
+  findMeshes(
+    filter: UserDataFilter | ((obj: THREE.Object3D) => boolean),
+    opts: { interactableOnly?: boolean } = {},
+  ): FoundMesh[] {
+    this.assertNotDisposed();
+    const match =
+      typeof filter === 'function'
+        ? filter
+        : (obj: THREE.Object3D) => {
+            const ud = obj.userData as Record<string, unknown>;
+            const f = filter as Record<string, unknown>;
+            for (const k of Object.keys(f)) {
+              if (ud[k] !== f[k]) return false;
+            }
+            return Object.keys(f).length > 0;
+          };
+    const results: FoundMesh[] = [];
+    const interactableOnly = opts.interactableOnly ?? false;
+
+    this.root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (interactableOnly && !this.hasInteractInAncestry(mesh)) return;
+      if (!match(mesh)) return;
+
+      const box = new THREE.Box3().setFromObject(mesh);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      results.push({ object: mesh, box, center });
+    });
+
+    return results;
+  }
+
   async focus(target: THREE.Object3D, opts: FocusOptions = {}): Promise<void> {
     this.assertNotDisposed();
     await this.navigator.focusOnObject(target, opts);
@@ -434,36 +474,17 @@ export class Viewer {
     opts: AddTipsForMeshesOptions,
   ): AddTipsForMeshesResult {
     this.assertNotDisposed();
-    const match =
-      typeof filter === 'function'
-        ? filter
-        : (obj: THREE.Object3D) => {
-            const ud = obj.userData as Record<string, unknown>;
-            const f = filter as Record<string, unknown>;
-            for (const k of Object.keys(f)) {
-              if (ud[k] !== f[k]) return false;
-            }
-            return Object.keys(f).length > 0;
-          };
+    const found = this.findMeshes(filter, { interactableOnly: opts.interactableOnly ?? false });
     const tipIds: string[] = [];
     const targetMap = new Map<string, THREE.Object3D>();
     const offset = opts.offset ?? 0.5;
     let idx = 0;
 
-    this.root.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      if (opts.interactableOnly && !this.hasInteractInAncestry(o)) return;
-      if (!match(o)) return;
-
-      const box = new THREE.Box3().setFromObject(mesh);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      const pos: [number, number, number] = [
-        center.x,
-        box.max.y + offset,
-        center.z,
-      ];
+    for (const item of found) {
+      const mesh = item.object;
+      const box = item.box;
+      const center = item.center;
+      const pos: [number, number, number] = [center.x, box.max.y + offset, center.z];
 
       const id = `tip-mesh-${idx++}`;
       const mergedUserData: Record<string, unknown> = { targetUuid: mesh.uuid };
@@ -482,7 +503,7 @@ export class Viewer {
       this.tips.addTipSync(id, pos, tipOpts);
       tipIds.push(id);
       targetMap.set(id, mesh);
-    });
+    }
 
     return { tipIds, targetMap };
   }

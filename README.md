@@ -173,6 +173,31 @@ export interface BVHOptions {
 - `viewer.enableBVHNow()`
   - 可手动在合批/精简后重新构建 BVH。
 
+### 查找 Mesh：`viewer.findMeshes`
+
+按 userData 或自定义条件查找 mesh，返回包围盒和中心点，方便做批量操作：
+
+```ts
+const results = viewer.findMeshes(
+  (o) => String(o.userData?.name ?? '').includes('ground'),
+  { interactableOnly: true },
+);
+
+results.forEach(({ object, box, center }) => {
+  console.log(object.name, center, box);
+});
+```
+
+返回类型：
+
+```ts
+interface FoundMesh {
+  object: THREE.Mesh;
+  box: THREE.Box3;
+  center: THREE.Vector3;
+}
+```
+
 ## 交互与事件
 
 `Viewer` 内部使用强类型事件总线：

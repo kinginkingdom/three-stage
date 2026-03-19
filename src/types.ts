@@ -272,6 +272,12 @@ export interface RoamOptions {
   loop?: boolean;
 }
 
+export interface FoundMesh {
+  object: THREE.Mesh;
+  box: THREE.Box3;
+  center: THREE.Vector3;
+}
+
 export type InfluenceZoneShape =
   | { kind: 'sphere'; center: [number, number, number]; radius: number }
   | { kind: 'box'; center: [number, number, number]; size: [number, number, number] };
