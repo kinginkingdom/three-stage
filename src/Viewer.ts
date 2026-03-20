@@ -483,37 +483,54 @@ export class Viewer {
     return found ?? target;
   }
 
-  setHighlightFromInteraction(hit: InteractionData | null, style: HighlightStyle = {}): void {
-    this.assertNotDisposed();
-    const resolved = this.resolveInteractionTarget(hit);
-    if (!resolved) {
-      this.visualizer.setHighlight(null);
-      return;
+  /**
+   * 从对象自身向上查找可作为业务目标的节点：
+   * 1) 优先最近的 `userData.interact === true`
+   * 2) 若未命中且允许回退，则找最近的 `userData.highlightRoot === true`
+   * 3) 都未命中时返回自身
+   */
+  findInteractionDataObject(
+    obj: THREE.Object3D,
+    opts: { fallbackToHighlightRoot?: boolean } = {},
+  ): THREE.Object3D {
+    const fallbackToHighlightRoot = opts.fallbackToHighlightRoot ?? true;
+
+    let cur: THREE.Object3D | null = obj;
+    while (cur) {
+      if ((cur.userData as { interact?: boolean })?.interact === true) return cur;
+      cur = cur.parent;
     }
-    // 高亮范围：优先用点击对象本身（若 interact=true），否则找最近的 interact 祖先
-    let obj: THREE.Object3D = resolved;
-    if ((obj.userData as { interact?: boolean })?.interact === true) {
-      // 点击对象本身即 interact 层，无需再往上找
-    } else {
-      let cur: THREE.Object3D | null = obj.parent;
+
+    if (fallbackToHighlightRoot) {
+      cur = obj;
       while (cur) {
-        if ((cur.userData as { interact?: boolean })?.interact === true) {
-          obj = cur;
-          break;
-        }
+        if ((cur.userData as { highlightRoot?: boolean })?.highlightRoot) return cur;
         cur = cur.parent;
       }
-      // 兼容：若未找到 interact，再尝试 highlightRoot
-      if (obj === resolved) {
-        cur = resolved;
-        while (cur) {
-          if ((cur.userData as { highlightRoot?: boolean })?.highlightRoot) {
-            obj = cur;
-            break;
-          }
-          cur = cur.parent;
-        }
-      }
+    }
+    return obj;
+  }
+
+  /**
+   * 面向交互 hit 的业务目标解析：
+   * - 先解析 tip -> 关联对象
+   * - 再向上收敛到 `interact=true`（可回退 highlightRoot）
+   */
+  resolveInteractionDataTarget(
+    hit: InteractionData | null,
+    opts: { fallbackToHighlightRoot?: boolean } = {},
+  ): THREE.Object3D | null {
+    const resolved = this.resolveInteractionTarget(hit);
+    if (!resolved) return null;
+    return this.findInteractionDataObject(resolved, opts);
+  }
+
+  setHighlightFromInteraction(hit: InteractionData | null, style: HighlightStyle = {}): void {
+    this.assertNotDisposed();
+    const obj = this.resolveInteractionDataTarget(hit, { fallbackToHighlightRoot: true });
+    if (!obj) {
+      this.visualizer.setHighlight(null);
+      return;
     }
     this.visualizer.setHighlight({ object: obj, instanceId: hit?.instanceId }, style);
   }

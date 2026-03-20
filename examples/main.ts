@@ -10,6 +10,46 @@ const MODEL_URL = '/models/P2_FAB_F1_update_draco.glb';
 const FAB_BG_DEMO = new URLSearchParams(location.search).get('fabBg') === '1';
 const FAB_BG_URL = '/models/fab.png';
 
+type TipSeed = { id: string; curName: string; position: [number, number, number] };
+type TipBatchConfig = {
+  textureUrl: string;
+  size: number;
+  sizeAttenuation?: boolean;
+  tips: TipSeed[];
+};
+type FabBackgroundConfig = {
+  imageUrl: string;
+  center: [number, number, number];
+  height: number;
+  renderOrder: number;
+  lockControls: boolean;
+  minDistance: number;
+  maxDistance: number;
+};
+
+const FAB_BG_CONFIG: FabBackgroundConfig = {
+  imageUrl: FAB_BG_URL,
+  center: [0, 0, 0],
+  height: 18,
+  renderOrder: -1000,
+  lockControls: true,
+  minDistance: 6,
+  maxDistance: 40,
+};
+
+const FAB_TIPS_CONFIG: TipBatchConfig = {
+  textureUrl: '/icons/pos.png',
+  size: 0.55,
+  sizeAttenuation: true,
+  tips: [
+    { id: 'fab-bg-fab', curName: 'FAB', position: [-8.8, 2.2, 0.03] },
+    { id: 'fab-bg-pmd', curName: 'PMD', position: [-1.7, 3.3, 0.03] },
+    { id: 'fab-bg-sgs', curName: 'SGS', position: [3.8, 0.6, 0.03] },
+    { id: 'fab-bg-hpm', curName: 'HPM', position: [-4.8, -1.6, 0.03] },
+    { id: 'fab-bg-cub', curName: 'CUB', position: [7.0, -2.2, 0.03] },
+  ],
+};
+
 const canvas = document.querySelector<HTMLCanvasElement>('#c');
 if (!canvas) throw new Error('Canvas not found');
 
@@ -36,10 +76,10 @@ const viewer = new Viewer({
       },
   optimizer: { frustumCulling: true, keepOriginals: false },
   initialCamera: FAB_BG_DEMO
-    ? { position: [0, 0, 14], target: [0, 0, 0] }
+    ? { position: [0, 0, 18], target: [10, 0, 0] }
     : {
         position: [15.6, 110.3, 91.4],
-        target: [15.6, -1.79, 2.25],
+        target: [9.6, -1.79, 2.25],
       },
 });
 
@@ -100,6 +140,52 @@ function attachTipDomPopups(tipIds: string[]) {
   });
 }
 
+function addTipsFromConfig(config: TipBatchConfig): string[] {
+  viewer.tips.registerTexture('pos', config.textureUrl);
+  const tipIds: string[] = [];
+  for (const tip of config.tips) {
+    viewer.tips.addTipSync(tip.id, tip.position, {
+      textureUrl: config.textureUrl,
+      size: config.size,
+      sizeAttenuation: config.sizeAttenuation ?? true,
+      userData: { curName: tip.curName },
+    });
+    tipIds.push(tip.id);
+  }
+  return tipIds;
+}
+
+async function setupFabBackground(config: FabBackgroundConfig): Promise<void> {
+  const tex = await new THREE.TextureLoader().loadAsync(config.imageUrl);
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const aspect = tex.image.width / Math.max(1, tex.image.height);
+  const width = config.height * aspect;
+  const [cx, cy, cz] = config.center;
+
+  const bgMat = new THREE.SpriteMaterial({
+    map: tex,
+    depthWrite: false,
+    depthTest: false,
+    transparent: true,
+  });
+  const bgSprite = new THREE.Sprite(bgMat);
+  bgSprite.name = 'fabBackgroundSprite';
+  bgSprite.renderOrder = config.renderOrder;
+  bgSprite.position.set(cx, cy, cz);
+  bgSprite.scale.set(width, config.height, 1);
+  viewer.scene.add(bgSprite);
+
+  const ctl = viewer.navigator.controls;
+  if (ctl && config.lockControls) {
+    ctl.enableRotate = false;
+    ctl.enablePan = false;
+    ctl.minDistance = config.minDistance;
+    ctl.maxDistance = config.maxDistance;
+    ctl.update();
+  }
+}
+
 /**
  * 静态园区鸟瞰 PNG 贴平面 + 若干 Sprite；仅缩放（轨道旋转/平移关闭）。
  * 打点坐标为相对图幅的比例，可按实际图微调 `u`/`v`。
@@ -110,64 +196,10 @@ async function runFabBackgroundDemo() {
   const hdr = document.querySelector('header small');
   if (hdr) {
     hdr.innerHTML =
-      'Fab 背景图模式 <code>?fabBg=1</code> · 滚轮缩放 · 点击 Sprite 看控制台 · 资源 <code>/models/fab.png</code>';
+      'Fab 背景图模式 <code>?fabBg=1</code> · 加载一个大 Sprite 作为背景 · 点击 Sprite 看控制台';
   }
-
-  const tex = await new THREE.TextureLoader().loadAsync(FAB_BG_URL);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = Math.min(8, viewer.renderer.capabilities.getMaxAnisotropy());
-
-  const cam = viewer.camera;
-  const dist = cam.position.distanceTo(new THREE.Vector3(0, 0, 0));
-  const vFov = (cam.fov * Math.PI) / 180;
-  const halfH = dist * Math.tan(vFov / 2);
-  const planeH = 2 * halfH;
-  const aspectImg = tex.image.width / Math.max(1, tex.image.height);
-  const planeW = planeH * aspectImg;
-
-  const geo = new THREE.PlaneGeometry(planeW, planeH);
-  const mat = new THREE.MeshBasicMaterial({
-    map: tex,
-    depthWrite: false,
-    transparent: false,
-  });
-  const bg = new THREE.Mesh(geo, mat);
-  bg.name = 'fabBackground';
-  bg.renderOrder = -1000;
-  // 不参与 root 射线检测（Interactor 只扫 root），故不会挡 Sprite
-  viewer.scene.add(bg);
-
-  const ctl = viewer.navigator.controls;
-  if (ctl) {
-    ctl.enableRotate = false;
-    ctl.enablePan = false;
-    ctl.minDistance = Math.max(6, dist * 0.55);
-    ctl.maxDistance = dist * 1.55;
-    ctl.target.set(0, 0, 0);
-    ctl.update();
-  }
-
-  viewer.tips.registerTexture('pos', '/icons/pos.png');
-
-  const tipDefs: { id: string; curName: string; u: number; v: number }[] = [
-    { id: 'fab-bg-fab', curName: 'FAB', u: -0.28, v: 0.08 },
-    { id: 'fab-bg-pmd', curName: 'PMD', u: -0.05, v: 0.12 },
-    { id: 'fab-bg-sgs', curName: 'SGS', u: 0.12, v: 0.02 },
-    { id: 'fab-bg-hpm', curName: 'HPM', u: -0.15, v: -0.06 },
-    { id: 'fab-bg-cub', curName: 'CUB', u: 0.22, v: -0.08 },
-  ];
-  const zTip = 0.25;
-  const tipIds: string[] = [];
-  for (const t of tipDefs) {
-    viewer.tips.addTipSync(t.id, [t.u * planeW, t.v * planeH, zTip], {
-      textureUrl: '/icons/pos.png',
-      size: 0.55,
-      sizeAttenuation: true,
-      userData: { curName: t.curName },
-    });
-    tipIds.push(t.id);
-  }
-
+  await setupFabBackground(FAB_BG_CONFIG);
+  const tipIds = addTipsFromConfig(FAB_TIPS_CONFIG);
   attachTipDomPopups(tipIds);
 }
 
