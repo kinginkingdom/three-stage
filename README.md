@@ -77,6 +77,14 @@ viewer.on('object-click', (hit) => {
 })().catch(console.error);
 ```
 
+### 本仓库 dev 示例：大图背景 + Sprite（`fab.png`）
+
+本地启动 dev 后访问 **`?fabBg=1`**（例如 `http://localhost:5173/?fabBg=1`，端口以实际为准）。将园区鸟瞰图放在 **`public/models/fab.png`**，示例会：
+
+- 用该图贴满与当前相机视锥匹配的竖直平面（不加载 GLB）；
+- 在图上用 **Tip Sprite** 打若干示例点（FAB / PMD / SGS 等），支持点击与 DOM 标签跟随；
+- **仅允许滚轮缩放**（关闭轨道旋转与平移）。实现见 `examples/main.ts` 中的 `runFabBackgroundDemo`。
+
 ## ViewerConfig 配置
 
 ```ts

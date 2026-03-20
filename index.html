@@ -75,13 +75,29 @@
       .tip-popup .value {
         margin-top: 2px;
       }
+      /* ?fabBg=1：仅保留标题，隐藏 GLB 示例按钮 */
+      body.fab-bg-demo #toggle-pipe,
+      body.fab-bg-demo #inspect-prev,
+      body.fab-bg-demo #inspect-next,
+      body.fab-bg-demo #inspect-restore,
+      body.fab-bg-demo #inspect-info,
+      body.fab-bg-demo [id^='view-'],
+      body.fab-bg-demo #roam-start,
+      body.fab-bg-demo #roam-stop {
+        display: none !important;
+      }
+      body.fab-bg-demo header span[style*='opacity'] {
+        display: none;
+      }
     </style>
   </head>
   <body>
     <div id="app">
       <header>
         <strong>three-stage</strong>
-        <small>Click objects to highlight. Replace <code>MODEL_URL</code> in <code>examples/main.ts</code>.</small>
+        <small
+          >Click objects to highlight. Replace <code>MODEL_URL</code> in <code>examples/main.ts</code>. Fab 背景图：
+          <code>?fabBg=1</code></small>
         <button id="toggle-pipe" type="button">管道 显示</button>
         <span style="margin-left: 12px; opacity: 0.7;">巡检:</span>
         <button id="inspect-prev" type="button">上一站</button>
@@ -93,6 +109,9 @@
         <button id="view-top" type="button">上</button>
         <button id="view-topLeft" type="button">左上</button>
         <button id="view-topRight" type="button">右上</button>
+        <span style="margin-left: 12px; opacity: 0.7;">漫游:</span>
+        <button id="roam-start" type="button">开始</button>
+        <button id="roam-stop" type="button">停止</button>
       </header>
       <canvas id="c"></canvas>
       <div id="tip-popups"></div>

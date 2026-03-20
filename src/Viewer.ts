@@ -60,6 +60,10 @@ export class Viewer {
   private fpsLowSince = 0;
   private fpsHighSince = 0;
   private shadowCatcher: THREE.Mesh | null = null;
+  private occlusionSnapshots = new Map<
+    string,
+    { original: THREE.Material; cloned: THREE.Material; opacity?: number; transparent?: boolean }
+  >();
 
   constructor(private readonly config: ViewerConfig) {
     this.events = new StrictEventBus<ViewerEvents>();
@@ -320,6 +324,85 @@ export class Viewer {
   setFrustumCulling(enabled: boolean): void {
     this.assertNotDisposed();
     this.optimizer.setFrustumCulling(this.root, enabled);
+  }
+
+  /**
+   * TODO: 仅对真正挡住相机→目标视线的 mesh 做“X 光”式半透明处理。
+   * 当前为实验实现：后续需要进一步调优（多材质、性能、与 BVH 更紧密配合）并补充 README 文档。
+   * 仅在调用时做一次射线，适合点击聚焦时使用。
+   */
+  applyOcclusionDimming(target: THREE.Object3D, opts: { opacity?: number } = {}): void {
+    this.assertNotDisposed();
+    const dimOpacity = opts.opacity ?? 0.15;
+    this.clearOcclusionDimming();
+
+    const camPos = this.camera.position.clone();
+    const targetPos = new THREE.Vector3();
+    target.getWorldPosition(targetPos);
+    const dir = targetPos.clone().sub(camPos).normalize();
+    const distToTarget = camPos.distanceTo(targetPos);
+
+    const raycaster = new THREE.Raycaster(camPos, dir);
+    // 避免 Sprite raycast 报错，需要提供 camera
+    (raycaster as any).camera = this.camera;
+    const intersects = raycaster.intersectObject(this.root, true);
+
+    const occluderMeshes = new Set<THREE.Mesh>();
+    const eps = 1e-3;
+
+    const targetSubtree = new Set<string>();
+    target.traverse((o) => targetSubtree.add(o.uuid));
+
+    for (const hit of intersects) {
+      if (hit.distance >= distToTarget - eps) break;
+      let obj: THREE.Object3D | null = hit.object;
+      // 跳过 Sprite 等非 Mesh 对象
+      if ((obj as any).isSprite) continue;
+      while (obj && !(obj as THREE.Mesh).isMesh) {
+        obj = obj.parent;
+      }
+      const mesh = obj as THREE.Mesh | null;
+      if (!mesh || !mesh.isMesh) continue;
+      if (targetSubtree.has(mesh.uuid)) continue;
+      if (this.hasInteractInAncestry(mesh)) continue;
+      if (Array.isArray(mesh.material)) continue;
+      occluderMeshes.add(mesh);
+    }
+
+    for (const mesh of occluderMeshes) {
+      const mat = mesh.material as THREE.Material & { opacity?: number; transparent?: boolean };
+      if (this.occlusionSnapshots.has(mesh.uuid)) continue;
+      const cloned = mat.clone();
+      this.occlusionSnapshots.set(mesh.uuid, {
+        original: mat,
+        cloned,
+        opacity: (cloned as any).opacity,
+        transparent: (cloned as any).transparent,
+      });
+      mesh.material = cloned;
+
+      const dimMat = cloned as THREE.Material & { opacity?: number; transparent?: boolean };
+      dimMat.transparent = true;
+      const base = dimMat.opacity ?? 1;
+      dimMat.opacity = Math.min(base, dimOpacity);
+      if ((dimMat as any).needsUpdate !== undefined) {
+        (dimMat as any).needsUpdate = true;
+      }
+    }
+  }
+
+  /** 恢复通过 applyOcclusionDimming 设置的 X 光半透明效果。 */
+  clearOcclusionDimming(): void {
+    if (this.occlusionSnapshots.size === 0) return;
+    for (const [uuid, snap] of this.occlusionSnapshots) {
+      const obj = this.root.getObjectByProperty('uuid', uuid) as THREE.Mesh | null;
+      if (!obj || !obj.isMesh) continue;
+      if (obj.material === snap.cloned) {
+        obj.material = snap.original;
+      }
+      (snap.cloned as any).dispose?.();
+    }
+    this.occlusionSnapshots.clear();
   }
 
   /**

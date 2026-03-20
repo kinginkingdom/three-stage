@@ -102,6 +102,10 @@ export class CameraController {
     const loop = opts.loop ?? false;
 
     const positions = points.map((p) => new THREE.Vector3(p.position[0], p.position[1], p.position[2]));
+    const lookAts = points.map((p) =>
+      p.lookAt ? new THREE.Vector3(p.lookAt[0], p.lookAt[1], p.lookAt[2]) : null,
+    );
+    const hasExplicitLookAt = lookAts.some((v) => v !== null);
     const curve = new THREE.CatmullRomCurve3(positions, loop, 'centripetal', 0.5);
 
     this.stopRoaming();
@@ -116,9 +120,36 @@ export class CameraController {
         const t = p.t % 1;
         const pos = curve.getPointAt(t);
         this.cfg.camera.position.copy(pos);
-        // 默认“向前看”：取切线方向作为视线（可在未来扩展为按点位 lookAt）
-        const forward = curve.getTangentAt(Math.min(1, t + 0.001)).normalize();
-        const lookAt = pos.clone().add(forward);
+        let lookAt: THREE.Vector3;
+        if (hasExplicitLookAt) {
+          // 使用 RoamPathPoint.lookAt：在相邻控制点之间做线性插值
+          const segT = t * (points.length - 1);
+          let i = Math.floor(segT);
+          let localT = segT - i;
+          if (i >= points.length - 1) {
+            i = points.length - 2;
+            localT = 1;
+          }
+
+          const getLookAtForIndex = (idx: number): THREE.Vector3 => {
+            const explicit = lookAts[idx];
+            if (explicit) return explicit.clone();
+            // 没有显式 lookAt 时，退化为“沿路径前进方向看”
+            const pt = positions[idx]!;
+            const tt = idx / (points.length - 1);
+            const forwardAtIdx = curve.getTangentAt(tt).normalize();
+            return pt.clone().add(forwardAtIdx);
+          };
+
+          const a = getLookAtForIndex(i);
+          const b = getLookAtForIndex(i + 1);
+          lookAt = a.lerp(b, localT);
+        } else {
+          // 默认“向前看”：取切线方向作为视线
+          const forward = curve.getTangentAt(Math.min(1, t + 0.001)).normalize();
+          lookAt = pos.clone().add(forward);
+        }
+
         this.cfg.camera.lookAt(lookAt);
         if (this.controls) {
           this.controls.target.copy(lookAt);
