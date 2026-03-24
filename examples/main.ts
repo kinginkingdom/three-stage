@@ -20,7 +20,8 @@ type TipBatchConfig = {
 type FabBackgroundConfig = {
   imageUrl: string;
   center: [number, number, number];
-  height: number;
+  /** 背景 Sprite 世界尺度（x/y），不根据贴图比例计算 */
+  scale: number;
   renderOrder: number;
   lockControls: boolean;
   minDistance: number;
@@ -30,7 +31,7 @@ type FabBackgroundConfig = {
 const FAB_BG_CONFIG: FabBackgroundConfig = {
   imageUrl: FAB_BG_URL,
   center: [0, 0, 0],
-  height: 18,
+  scale: 50,
   renderOrder: -1000,
   lockControls: true,
   minDistance: 6,
@@ -61,6 +62,9 @@ const viewer = new Viewer({
   enableDrag: !FAB_BG_DEMO,
   enableBVH: !FAB_BG_DEMO,
   enableRoaming: !FAB_BG_DEMO,
+  raycast: {
+    hoverDelayMs: 300, // 停留 300ms 后才触发 object-hover
+  },
   clearColor: 0xffffff,
   lighting: FAB_BG_DEMO
     ? { shadows: false }
@@ -101,6 +105,17 @@ viewer.on('object-click', (hit) => {
     viewer.applyOcclusionDimming(target, { opacity: 0.18 });
     viewer.focus(target, { durationMs: 500, padding: 1.4 }).catch(() => void 0);
   }
+});
+
+// Hover 示例：快速划过不触发，停留超过 hoverDelayMs 才触发
+viewer.on('object-hover', (hit) => {
+  if (!hit) {
+    console.log('[hover] leave');
+    return;
+  }
+  const target = viewer.resolveInteractionDataTarget(hit);
+  const ud = target?.userData as { curName?: string; name?: string } | undefined;
+  console.log('[hover] target:', ud?.curName ?? ud?.name ?? target?.name ?? target?.uuid ?? 'unknown');
 });
 
 // Tip 旁 DOM 弹框：常驻显示 curName 等，每个 tip 一个
@@ -155,13 +170,19 @@ function addTipsFromConfig(config: TipBatchConfig): string[] {
   return tipIds;
 }
 
+function runAfterFirstPaint(task: () => void, delayMs = 150): void {
+  // 比 requestIdleCallback 更可控：确保首帧出来后再执行，并且一定会触发
+  window.requestAnimationFrame(() => {
+    window.setTimeout(task, delayMs);
+  });
+}
+
 async function setupFabBackground(config: FabBackgroundConfig): Promise<void> {
   const tex = await new THREE.TextureLoader().loadAsync(config.imageUrl);
   tex.colorSpace = THREE.SRGBColorSpace;
 
-  const aspect = tex.image.width / Math.max(1, tex.image.height);
-  const width = config.height * aspect;
   const [cx, cy, cz] = config.center;
+  const s = config.scale;
 
   const bgMat = new THREE.SpriteMaterial({
     map: tex,
@@ -173,7 +194,7 @@ async function setupFabBackground(config: FabBackgroundConfig): Promise<void> {
   bgSprite.name = 'fabBackgroundSprite';
   bgSprite.renderOrder = config.renderOrder;
   bgSprite.position.set(cx, cy, cz);
-  bgSprite.scale.set(width, config.height, 1);
+  bgSprite.scale.set(s, s, 1);
   viewer.scene.add(bgSprite);
 
   const ctl = viewer.navigator.controls;
@@ -204,26 +225,32 @@ async function runFabBackgroundDemo() {
 }
 
 async function run() {
+  console.time('first-visible');
   const root = await viewer.load(MODEL_URL, { attachToRoot: true });
 
   // userData.type === 'pipe' 的管道初始化隐藏
   viewer.setVisibilityByUserData({ type: 'pipe' }, false);
+  console.timeEnd('first-visible');
 
   // Manual performance controls（排除 pipe、ground，保留层级以便交互）
   const hasGroundInAncestry = (o: THREE.Object3D) =>
     String((o.userData as { name?: string }).name ?? '').includes('ground');
-  viewer.optimizeInstancing({
-    minCount: 2,
-    enableInstanceColor: true,
-    excludeUserData: { type: 'pipe' },
-    excludeFilter: hasGroundInAncestry,
-  });
-  viewer.optimizeMerge({
-    groupByMaterial: true,
-    disposeSources: false,
-    excludeUserData: { type: 'pipe' },
-    excludeFilter: hasGroundInAncestry,
-  });
+  runAfterFirstPaint(() => {
+    console.time('post-optimize');
+    viewer.optimizeInstancing({
+      minCount: 2,
+      enableInstanceColor: true,
+      excludeUserData: { type: 'pipe' },
+      excludeFilter: hasGroundInAncestry,
+    });
+    viewer.optimizeMerge({
+      groupByMaterial: true,
+      disposeSources: false,
+      excludeUserData: { type: 'pipe' },
+      excludeFilter: hasGroundInAncestry,
+    });
+    console.timeEnd('post-optimize');
+  }, 200);
 
   // 管道显隐切换按钮
   let pipesVisible = false;
@@ -333,6 +360,16 @@ async function run() {
 
   // Optional: focus whole loaded root at start
   // await viewer.focus(root, { durationMs: 700, padding: 1.6 });
+  const center = new THREE.Vector3(); // 模型中心
+new THREE.Box3().setFromObject(root).getCenter(center);
+
+const target = viewer.navigator.controls?.target.clone() ?? new THREE.Vector3(0, 0, 0);
+const delta = center.clone().sub(target);
+
+// 保持角度，只做平移
+viewer.camera.position.add(delta);
+viewer.navigator.controls?.target.add(delta);
+viewer.navigator.controls?.update();
 }
 
 async function main() {

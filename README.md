@@ -110,6 +110,22 @@ export interface ViewerConfig {
 }
 ```
 
+### 射线与 Hover（RaycastOptions）
+
+```ts
+export interface RaycastOptions {
+  whitelist?: ReadonlyArray<THREE.Object3D>;
+  blacklist?: ReadonlyArray<THREE.Object3D>;
+  layers?: number[];
+  params?: THREE.RaycasterParameters;
+  maxHits?: number;
+  hoverDelayMs?: number; // 新增：hover 停留延迟（毫秒）
+}
+```
+
+- `hoverDelayMs` 默认 `250`；例如设置 `300` 后，鼠标短暂划过不会触发 `object-hover`，停留超过阈值才触发。
+- 值为 `0` 或负数时，恢复“即时 hover”。
+
 ### 光照 LightingOptions
 
 ```ts
@@ -348,6 +364,13 @@ const { tipIds, targetMap } = viewer.addTipsForMeshes(
 viewer.on('object-click', (hit) => {
   const target = viewer.resolveInteractionTarget(hit);
   if (target) viewer.focus(target);
+});
+
+// 若需要拿“业务对象”（优先 interact=true，回退 highlightRoot）
+viewer.on('object-hover', (hit) => {
+  const dataTarget = viewer.resolveInteractionDataTarget(hit);
+  if (!dataTarget) return;
+  // dataTarget.userData ...
 });
 ```
 

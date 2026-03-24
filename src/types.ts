@@ -126,6 +126,12 @@ export interface RaycastOptions {
    * When set, we stop once we have enough hits.
    */
   maxHits?: number;
+  /**
+   * Hover event delay in milliseconds.
+   * - 0 or negative: emit hover immediately on pointer move.
+   * - positive: pointer must stay on same target for this duration.
+   */
+  hoverDelayMs?: number;
 }
 
 export interface InteractionData {

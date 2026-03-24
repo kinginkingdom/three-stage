@@ -17,6 +17,10 @@ export class InteractionManager {
   private readonly raycaster = new THREE.Raycaster();
   private readonly ndc = new THREE.Vector2();
   private readonly lastHover: { uuid: string | null; instanceId: number | undefined } = { uuid: null, instanceId: undefined };
+  private hoverTimer: number | null = null;
+  private pendingHoverKey: string | null = null;
+  private pendingHoverHit: InteractionData | null = null;
+  private hoverDelayMs: number;
   private dragging: { pointerId: number; hit: InteractionData } | null = null;
   // 点击判定相关：短按 + 小位移 才认为是 click
   private pointerDownPos: { x: number; y: number } | null = null;
@@ -31,18 +35,21 @@ export class InteractionManager {
     private readonly cfg: InteractionManagerConfig,
   ) {
     if (cfg.raycast?.params) this.raycaster.params = cfg.raycast.params;
+    this.hoverDelayMs = cfg.raycast?.hoverDelayMs ?? 250;
     this.bind();
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.clearPendingHover();
     this.unbind();
   }
 
   setRaycastOptions(opts: RaycastOptions): void {
     this.assertNotDisposed();
     if (opts.params) this.raycaster.params = opts.params;
+    if (typeof opts.hoverDelayMs === 'number') this.hoverDelayMs = opts.hoverDelayMs;
     (this.cfg as InteractionManagerConfig).raycast = opts;
   }
 
@@ -86,11 +93,32 @@ export class InteractionManager {
 
     const curKey = hit.uuid ? `${hit.uuid}:${hit.instanceId ?? -1}` : null;
     const prevKey = this.lastHover.uuid ? `${this.lastHover.uuid}:${this.lastHover.instanceId ?? -1}` : null;
-    if (curKey !== prevKey) {
+    if (curKey === prevKey) return;
+
+    // 目标切换时，先关闭当前 hover（弹框可立即隐藏）
+    if (prevKey !== null) {
+      this.lastHover.uuid = null;
+      this.lastHover.instanceId = undefined;
+      this.bus.emit('object-hover', null);
+    }
+
+    // 移出可交互目标：仅清空，不再触发延迟
+    if (curKey === null) {
+      this.clearPendingHover();
+      return;
+    }
+
+    // 目标没变且已有 pending，避免重复重置计时器
+    if (curKey === this.pendingHoverKey) return;
+
+    if (this.hoverDelayMs <= 0) {
       this.lastHover.uuid = hit.uuid;
       this.lastHover.instanceId = hit.instanceId;
       this.bus.emit('object-hover', hit.intersection ? hit : null);
+      return;
     }
+
+    this.scheduleHover(curKey, hit);
   };
 
   private onPointerDown = (ev: PointerEvent) => {
@@ -143,6 +171,7 @@ export class InteractionManager {
 
   private onPointerLeave = (_ev: PointerEvent) => {
     if (this.disposed) return;
+    this.clearPendingHover();
     if (this.lastHover.uuid !== null) {
       this.lastHover.uuid = null;
       this.lastHover.instanceId = undefined;
@@ -243,6 +272,30 @@ export class InteractionManager {
 
   private assertNotDisposed(): void {
     if (this.disposed) throw new Error('InteractionManager is disposed');
+  }
+
+  private scheduleHover(key: string, hit: InteractionData): void {
+    this.clearPendingHover();
+    this.pendingHoverKey = key;
+    this.pendingHoverHit = hit;
+    this.hoverTimer = window.setTimeout(() => {
+      const pendingKey = this.pendingHoverKey;
+      const pendingHit = this.pendingHoverHit;
+      this.clearPendingHover();
+      if (!pendingKey || !pendingHit || this.disposed) return;
+      this.lastHover.uuid = pendingHit.uuid;
+      this.lastHover.instanceId = pendingHit.instanceId;
+      this.bus.emit('object-hover', pendingHit.intersection ? pendingHit : null);
+    }, this.hoverDelayMs);
+  }
+
+  private clearPendingHover(): void {
+    if (this.hoverTimer !== null) {
+      window.clearTimeout(this.hoverTimer);
+      this.hoverTimer = null;
+    }
+    this.pendingHoverKey = null;
+    this.pendingHoverHit = null;
   }
 }
 
