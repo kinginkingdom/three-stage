@@ -449,7 +449,7 @@ viewer.on('object-click', (hit) => {
 
 ## 版本记录
 
-### 0.3.0
+### 0.2.1
 
 - **场景相机**：新增 `applySceneCameraView`、`applySceneCameraViewById`、`syncCameraToSceneView`；`applySceneCameras` 内部复用单视角应用逻辑。
 - **示例预设**：`scenePresets` 中模型 / 背景场景补充多组 `cameras.views` 书签。
@@ -471,7 +471,7 @@ viewer.on('object-click', (hit) => {
 
 - 在 `package.json` 中设置：
   - `name`：你要发布的包名（例如 `@your-scope/three-stage`）。
-  - `version`：如 `0.3.0`。
+  - `version`：如 `0.2.1`。
   - `description` / `keywords` / `repository` / `author` 等元信息。
 - 确保构建脚本：
 
