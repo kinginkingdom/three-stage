@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Viewer } from '../Viewer';
 import type {
   SceneCameraConfig,
+  SceneCameraViewConfig,
   SceneConfig,
   SceneSource,
   SceneTipConfig,
@@ -91,7 +92,11 @@ export function applySceneCameras(viewer: Viewer, cameras: SceneCameraConfig): v
   if (!cameras.views.length) return;
   const defaultId = cameras.defaultViewId ?? cameras.views[0]!.id;
   const view = cameras.views.find((v) => v.id === defaultId) ?? cameras.views[0]!;
+  applySceneCameraView(viewer, view);
+}
 
+/** 切换到某一预设视角（不修改 defaultViewId） */
+export function applySceneCameraView(viewer: Viewer, view: SceneCameraViewConfig): void {
   viewer.camera.position.fromArray(view.position);
   viewer.camera.lookAt(...view.target);
   if (view.fov != null) {
@@ -102,6 +107,25 @@ export function applySceneCameras(viewer: Viewer, cameras: SceneCameraConfig): v
     viewer.navigator.controls.target.set(...view.target);
     viewer.navigator.controls.update();
   }
+}
+
+/** 按 id 查找并切换视角；找不到返回 false */
+export function applySceneCameraViewById(viewer: Viewer, cameras: SceneCameraConfig, viewId: string): boolean {
+  const view = cameras.views.find((v) => v.id === viewId);
+  if (!view) return false;
+  applySceneCameraView(viewer, view);
+  return true;
+}
+
+/** 将当前相机与 Orbit 目标写入指定视角条目（非仅默认） */
+export function syncCameraToSceneView(viewer: Viewer, cameras: SceneCameraConfig, viewId: string): boolean {
+  const v = cameras.views.find((x) => x.id === viewId);
+  if (!v) return false;
+  const ctl = viewer.navigator.controls;
+  v.position = [viewer.camera.position.x, viewer.camera.position.y, viewer.camera.position.z];
+  if (ctl) v.target = [ctl.target.x, ctl.target.y, ctl.target.z];
+  v.fov = viewer.camera.fov;
+  return true;
 }
 
 /** 从 Viewer 同步 Tip 世界坐标到配置（与 applySceneTips 对称） */

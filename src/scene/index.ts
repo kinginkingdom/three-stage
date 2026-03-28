@@ -16,6 +16,8 @@ export type {
 } from './sceneConfigTypes';
 
 export {
+  applySceneCameraView,
+  applySceneCameraViewById,
   applySceneCameras,
   applySceneConfig,
   applySceneSource,
@@ -25,6 +27,7 @@ export {
   exportSceneConfig,
   parseSceneConfigJson,
   sceneConfigToJson,
+  syncCameraToSceneView,
   syncDefaultCameraToConfig,
   syncDefaultCameraToSceneConfig,
   syncTipPositionsFromViewer,

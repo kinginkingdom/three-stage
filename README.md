@@ -93,9 +93,18 @@ viewer.on('object-click', (hit) => {
   - 侧栏编辑 `binding`（name / deviceId / type），同步到 Sprite `userData`；
   - **导出 JSON**：`exportSceneConfig`（与 `applySceneConfig` 对称，含 Tip 坐标与默认相机视角）；亦可使用 `captureSceneConfigFromViewer`。
   - **导入 JSON**：粘贴后「导入并应用」。
+- **场景配置工作台（关系映射 + 编辑合一）**：`mapping.html` + `examples/mapping/`
+  - **前置**：弹窗模拟「楼层房间 ↔ 场景文件 / 初始 JSON」绑定；也可 `?roomId=room-substation-1f` 直达。
+  - 进入后按房间加载**设备 / 设备组**列表；场景来自 `SceneConfig`（含已有 Tip）；**仅列出自身 `userData.interact === true`** 的 Mesh、Group（节点）、Tip；**模型 ID 为 `userData.name`**。
+  - **Tip**：画布上方 **图标条拖到画布** 放置；选中后 **TransformControls** + **固定悬浮窗** 编辑（与旧场景编辑器一致）；侧栏「高级」可粘贴 JSON。
+  - **关联映射**：总表 + 设备/设备组**两个下拉二选一**；绑定按房间存 `localStorage`（Demo）。
+  - **预设视角**：`SceneConfig.cameras.views` 支持多书签；画布上方可快速切换，侧栏「高级」可更新某条书签、改默认视角或从当前机位新增书签。库内新增 `applySceneCameraView` / `applySceneCameraViewById` / `syncCameraToSceneView`。
+  - **光照**：工作台 Viewer 使用略增强的默认半球光 + 主光 + 两盏补光，减轻模型场景偏暗。
+  - **保存**：控制台打印 `sceneConfig` 快照与 `deviceBindings` 完整 payload（预留对接上传）。
+  - 独立 **`/editor.html`** 仍保留作轻量编辑入口。
 - **场景配置 API**（类型如 `SceneConfig` / `TipConfig`，函数如 `applySceneConfig`、`clearSceneConfigLayers`、`captureSceneConfigFromViewer`、`parseSceneConfigJson`）从包根 **`@murmur_han/three-stage`** 导出；本仓库示例里通过 **`examples/sceneConfig.ts`** 再导出，并附带演示预设 **`examples/scenePresets.ts`**（`bgDemoConfig` / `modelDemoConfig`）。
 
-依赖：`npm install` 后 `npm run dev`，浏览器打开 **`/editor.html`** 或 **`/config.html`**。
+依赖：`npm install` 后 `npm run dev`，浏览器打开 **`/editor.html`**、**`/config.html`** 或 **`/mapping.html`**。
 
 ## ViewerConfig 配置
 
@@ -440,6 +449,12 @@ viewer.on('object-click', (hit) => {
 
 ## 版本记录
 
+### 0.3.0
+
+- **场景相机**：新增 `applySceneCameraView`、`applySceneCameraViewById`、`syncCameraToSceneView`；`applySceneCameras` 内部复用单视角应用逻辑。
+- **示例预设**：`scenePresets` 中模型 / 背景场景补充多组 `cameras.views` 书签。
+- **Dev 工作台**：`mapping.html` 场景配置工作台（房间上下文、Tip 拖拽、悬浮编辑、设备关联、保存打印 payload）、`public/icons` 多枚 Tip 贴图；工作台 Viewer 增强补光。
+
 ### 0.2.0
 
 - 主入口导出**场景配置协议与运行时**：`SceneConfig`、`TipConfig`（及 `Scene*` 类型）、`applySceneConfig`、`clearSceneConfigLayers`、`captureSceneConfigFromViewer` / `exportSceneConfig`、`parseSceneConfigJson`、`syncDefaultCameraToSceneConfig` 等（实现位于 `src/scene`）。
@@ -456,7 +471,7 @@ viewer.on('object-click', (hit) => {
 
 - 在 `package.json` 中设置：
   - `name`：你要发布的包名（例如 `@your-scope/three-stage`）。
-  - `version`：如 `0.2.0`。
+  - `version`：如 `0.3.0`。
   - `description` / `keywords` / `repository` / `author` 等元信息。
 - 确保构建脚本：
 
