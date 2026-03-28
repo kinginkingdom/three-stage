@@ -1,4 +1,5 @@
 export * from './types';
+export * from './scene';
 export * from './Viewer';
 export * from './core/EventBus';
 export { worldToScreen } from './core/utils';

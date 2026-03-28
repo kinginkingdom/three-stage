@@ -85,6 +85,18 @@ viewer.on('object-click', (hit) => {
 - 在图上用 **Tip Sprite** 打若干示例点（FAB / PMD / SGS 等），支持点击与 DOM 标签跟随；
 - **仅允许滚轮缩放**（关闭轨道旋转与平移）。实现见 `examples/main.ts` 中的 `runFabBackgroundDemo`。
 
+### 配置驱动与场景编辑器（dev）
+
+- **只读展示**：`config.html` + `examples/configScene.ts`，`?kind=background` / `?kind=model` 切换示例。
+- **编辑能力**：`editor.html` + Vue3 + Element Plus（`examples/editor/`）
+  - 点击 Tip Sprite 选中，**TransformControls** 三轴平移；
+  - 侧栏编辑 `binding`（name / deviceId / type），同步到 Sprite `userData`；
+  - **导出 JSON**：`exportSceneConfig`（与 `applySceneConfig` 对称，含 Tip 坐标与默认相机视角）；亦可使用 `captureSceneConfigFromViewer`。
+  - **导入 JSON**：粘贴后「导入并应用」。
+- **场景配置 API**（类型如 `SceneConfig` / `TipConfig`，函数如 `applySceneConfig`、`clearSceneConfigLayers`、`captureSceneConfigFromViewer`、`parseSceneConfigJson`）从包根 **`@murmur_han/three-stage`** 导出；本仓库示例里通过 **`examples/sceneConfig.ts`** 再导出，并附带演示预设 **`examples/scenePresets.ts`**（`bgDemoConfig` / `modelDemoConfig`）。
+
+依赖：`npm install` 后 `npm run dev`，浏览器打开 **`/editor.html`** 或 **`/config.html`**。
+
 ## ViewerConfig 配置
 
 ```ts
@@ -426,11 +438,25 @@ viewer.on('object-click', (hit) => {
 
 ---
 
+## 版本记录
+
+### 0.2.0
+
+- 主入口导出**场景配置协议与运行时**：`SceneConfig`、`TipConfig`（及 `Scene*` 类型）、`applySceneConfig`、`clearSceneConfigLayers`、`captureSceneConfigFromViewer` / `exportSceneConfig`、`parseSceneConfigJson`、`syncDefaultCameraToSceneConfig` 等（实现位于 `src/scene`）。
+- 仓库内示例：`config.html` / `editor.html`，演示预设 `examples/scenePresets.ts`。
+- `package.json` 已配置 `prepublishOnly`，`npm publish` 前会自动执行 `npm run build`。
+
+### 0.1.x
+
+- 此前版本见 npm 与 git 历史。
+
+---
+
 ## 发布到 npm 的建议
 
 - 在 `package.json` 中设置：
   - `name`：你要发布的包名（例如 `@your-scope/three-stage`）。
-  - `version`：如 `0.1.0`。
+  - `version`：如 `0.2.0`。
   - `description` / `keywords` / `repository` / `author` 等元信息。
 - 确保构建脚本：
 
@@ -439,7 +465,8 @@ viewer.on('object-click', (hit) => {
   "scripts": {
     "build": "npm run build:types && vite build",
     "build:types": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "exports": {
     ".": {
@@ -453,8 +480,9 @@ viewer.on('object-click', (hit) => {
 发布流程示例：
 
 ```bash
-npm run build
 npm publish --access public
 ```
 
-> 如需改为私有包或组织作用域，请按你公司/团队的 npm 规范调整 `name` 和 `access`。*** End Patch
+（`prepublishOnly` 会在发布前自动构建；若需本地检查，可先执行 `npm run build`。）
+
+> 如需改为私有包或组织作用域，请按你公司/团队的 npm 规范调整 `name` 和 `access`。

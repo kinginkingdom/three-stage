@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>three-stage config viewer</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #0b1020;
+        color: #e6e8ef;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+      }
+      #app {
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr;
+      }
+      header {
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      small {
+        opacity: 0.8;
+      }
+      code {
+        background: rgba(255, 255, 255, 0.08);
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <strong>three-stage · Config Viewer</strong>
+        <small>
+          通过 JSON 配置加载场景。
+          使用 <code>?kind=background</code> 或 <code>?kind=model</code> 切换示例。
+        </small>
+      </header>
+      <canvas id="c"></canvas>
+      <div id="tip-popups"></div>
+    </div>
+    <script type="module" src="/examples/configScene.ts"></script>
+  </body>
+</html>
+

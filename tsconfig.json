@@ -18,6 +18,7 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
   },
-  "include": ["src", "examples"]
+  "include": ["src", "examples"],
+  "exclude": ["examples/editor/**"]
 }
 

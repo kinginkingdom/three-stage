@@ -1,0 +1,31 @@
+export type {
+  BackgroundConfig,
+  CameraConfig,
+  CameraViewConfig,
+  ModelConfig,
+  SceneBackgroundConfig,
+  SceneCameraConfig,
+  SceneCameraViewConfig,
+  SceneConfig,
+  SceneConfigVec3,
+  SceneModelConfig,
+  SceneSource,
+  SceneTipConfig,
+  TipConfig,
+  Vec3,
+} from './sceneConfigTypes';
+
+export {
+  applySceneCameras,
+  applySceneConfig,
+  applySceneSource,
+  applySceneTips,
+  captureSceneConfigFromViewer,
+  clearSceneConfigLayers,
+  exportSceneConfig,
+  parseSceneConfigJson,
+  sceneConfigToJson,
+  syncDefaultCameraToConfig,
+  syncDefaultCameraToSceneConfig,
+  syncTipPositionsFromViewer,
+} from './sceneRuntime';
