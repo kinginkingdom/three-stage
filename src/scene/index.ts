@@ -20,6 +20,7 @@ export {
   applySceneCameraViewById,
   applySceneCameras,
   applySceneConfig,
+  optimizeSceneForPerformance,
   applySceneSource,
   applySceneTips,
   captureSceneConfigFromViewer,

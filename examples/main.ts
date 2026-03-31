@@ -225,18 +225,18 @@ async function runFabBackgroundDemo() {
 }
 
 async function run() {
-  console.time('first-visible');
+  // console.time('first-visible');
   const root = await viewer.load(MODEL_URL, { attachToRoot: true });
 
   // userData.type === 'pipe' 的管道初始化隐藏
   viewer.setVisibilityByUserData({ type: 'pipe' }, false);
-  console.timeEnd('first-visible');
+  // console.timeEnd('first-visible');
 
   // Manual performance controls（排除 pipe、ground，保留层级以便交互）
   const hasGroundInAncestry = (o: THREE.Object3D) =>
     String((o.userData as { name?: string }).name ?? '').includes('ground');
-  runAfterFirstPaint(() => {
-    console.time('post-optimize');
+  // runAfterFirstPaint(() => {
+    // console.time('post-optimize');
     viewer.optimizeInstancing({
       minCount: 2,
       enableInstanceColor: true,
@@ -249,8 +249,8 @@ async function run() {
       excludeUserData: { type: 'pipe' },
       excludeFilter: hasGroundInAncestry,
     });
-    console.timeEnd('post-optimize');
-  }, 200);
+    // console.timeEnd('post-optimize');
+  // }, 200);
 
   // 管道显隐切换按钮
   let pipesVisible = false;

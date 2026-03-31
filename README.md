@@ -22,6 +22,7 @@
   - `userData.highlightRoot = true` 支持“整柜/整设备”整体高亮。
   - 呼吸灯高亮（可配置强度、周期）。
   - 影响区域（球/盒）可视化（半透明体 + Edges 边线）。
+- **场效应叠加（监测/应急可视化）**：`HazardFieldLayer` + `HazardFieldSpec` — 气体为多层 **Fresnel + 脉动 + Additive** 球壳，漏液为 **涟漪 + 高亮芯 + Additive** 圆盘，热力为 **噪声扰动 + 闪烁 + Additive** 平面高斯；内置 `requestAnimationFrame` 驱动 `uTime`（可选 `animated: false` 关闭）。由业务把后端状态映射为 spec 后 `setSpecs`。独立示例：**`/hazard.html`**。
 - **按 userData 显隐**：`setVisibilityByUserData({ type: 'pipe' }, false)` 批量控制对象显隐。
 - **Tip Sprite & 巡检**：
   - `addTipsForMeshes` 为 mesh 上方批量添加 Sprite，支持 `resolveInteractionTarget` 使点击 tip 等同于点击关联 mesh。
@@ -104,7 +105,7 @@ viewer.on('object-click', (hit) => {
   - 独立 **`/editor.html`** 仍保留作轻量编辑入口。
 - **场景配置 API**（类型如 `SceneConfig` / `TipConfig`，函数如 `applySceneConfig`、`clearSceneConfigLayers`、`captureSceneConfigFromViewer`、`parseSceneConfigJson`）从包根 **`@murmur_han/three-stage`** 导出；本仓库示例里通过 **`examples/sceneConfig.ts`** 再导出，并附带演示预设 **`examples/scenePresets.ts`**（`bgDemoConfig` / `modelDemoConfig`）。
 
-依赖：`npm install` 后 `npm run dev`，浏览器打开 **`/editor.html`**、**`/config.html`** 或 **`/mapping.html`**。
+依赖：`npm install` 后 `npm run dev`，浏览器打开 **`/editor.html`**、**`/config.html`**、**`/mapping.html`** 或 **`/hazard.html`**（`HazardFieldLayer` 场效应独立示例）。
 
 ## ViewerConfig 配置
 
@@ -449,7 +450,13 @@ viewer.on('object-click', (hit) => {
 
 ## 版本记录
 
-### 0.2.1
+### 0.2.2
+
+- **场景配置工作台（mapping.html）**：支持 `scene.source.models` 多 GLB 模型编辑；新增「模型源」面板，可添加/删除模型条目，编辑 `id` / `url` / `position` / `scale` / `visible`。
+- **BIM 拖拽与显隐**：通过工作台右侧「场景模型」列表选中 GLB 根节点，使用 TransformControls 拖拽平移/缩放，释放时自动将坐标写回 `SceneConfig`；列表新增显隐开关（Tip / Mesh / 节点均可控制）。
+- **性能与交互优化**：新增 `optimizeSceneForPerformance(viewer, options)` 场景优化辅助；拖拽 Sprite / BIM 时仅在拖拽结束写回配置，避免高频响应式更新导致卡顿；设备列表与「高级」面板支持滚动。
+
+### 0.2.1*** End Patch```} />
 
 - **场景相机**：新增 `applySceneCameraView`、`applySceneCameraViewById`、`syncCameraToSceneView`；`applySceneCameras` 内部复用单视角应用逻辑。
 - **示例预设**：`scenePresets` 中模型 / 背景场景补充多组 `cameras.views` 书签。

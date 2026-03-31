@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>three-stage · HazardFieldLayer 场效应</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      #wrap {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: #1a1f2e;
+        color: #e6e8ef;
+      }
+      header {
+        flex-shrink: 0;
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 16px;
+        align-items: center;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+      .controls label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button {
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+        color: inherit;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      button:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+      #canvas-host {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .hint {
+        font-size: 12px;
+        opacity: 0.75;
+        max-width: 520px;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <header>
+        <h1>HazardFieldLayer · 气体 / 漏液 / 热力</h1>
+        <div class="controls">
+          <label><input type="checkbox" id="ck-gas" checked /> 气体</label>
+          <label><input type="checkbox" id="ck-liquid" checked /> 漏液</label>
+          <label><input type="checkbox" id="ck-heat" checked /> 热力</label>
+          <button type="button" id="btn-refresh">应用勾选</button>
+          <button type="button" id="btn-clear">清除全部</button>
+        </div>
+        <p class="hint">
+          加载示例 GLB 后叠加场效应；勾选切换后点「应用勾选」。实现见 <code>examples/hazardFieldsDemo.ts</code>，与 SceneConfig
+          无关，由业务将推送状态映射为 <code>HazardFieldSpec</code>。
+        </p>
+      </header>
+      <div id="canvas-host">
+        <canvas id="c"></canvas>
+      </div>
+    </div>
+    <script type="module" src="/examples/hazardFieldsDemo.ts"></script>
+  </body>
+</html>

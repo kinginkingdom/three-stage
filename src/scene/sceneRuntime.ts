@@ -30,6 +30,46 @@ export async function applySceneConfig(viewer: Viewer, config: SceneConfig): Pro
   applySceneCameras(viewer, config.cameras);
 }
 
+/**
+ * 通用场景几何优化（实例化 / 合批），便于在通过 SceneConfig 加载完场景后复用。
+ * 具体排除规则（如管道、地面等）建议由调用方在 Viewer 层自行处理。
+ */
+export function optimizeSceneForPerformance(
+  viewer: Viewer,
+  options?: {
+    /** 触发实例化的最小重复次数，对应 optimizeInstancing.minCount，默认 2 */
+    minInstanceCount?: number;
+    /** 是否启用实例颜色，对应 optimizeInstancing.enableInstanceColor，默认 true */
+    enableInstanceColor?: boolean;
+    /** 是否按材质合批，对应 optimizeMerge.groupByMaterial，默认 true */
+    groupByMaterial?: boolean;
+    /** 合批后是否释放源 mesh，对应 optimizeMerge.disposeSources，默认 false */
+    disposeSources?: boolean;
+  },
+): void {
+  const {
+    minInstanceCount = 2,
+    enableInstanceColor = true,
+    groupByMaterial = true,
+    disposeSources = false,
+  } = options ?? {};
+
+  // 这些方法在 Viewer 示例里已有；加 typeof 判断以防将来裁剪 API
+  if (typeof (viewer as any).optimizeInstancing === 'function') {
+    (viewer as any).optimizeInstancing({
+      minCount: minInstanceCount,
+      enableInstanceColor,
+    });
+  }
+
+  if (typeof (viewer as any).optimizeMerge === 'function') {
+    (viewer as any).optimizeMerge({
+      groupByMaterial,
+      disposeSources,
+    });
+  }
+}
+
 export async function applySceneSource(viewer: Viewer, source: SceneSource): Promise<void> {
   if (source.kind === 'background') {
     const bg = source.background;

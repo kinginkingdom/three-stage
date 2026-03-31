@@ -8,6 +8,7 @@ import {
   type SceneConfig,
   applySceneCameraViewById,
   applySceneConfig,
+  optimizeSceneForPerformance,
   captureSceneConfigFromViewer,
   sceneConfigToJson,
   parseSceneConfigJson,
@@ -21,6 +22,7 @@ import {
   getRoomContext,
   type RoomSceneContext,
 } from './mockRooms';
+import { modelDemoConfig } from '../scenePresets';
 import type { DemoDevice, DemoDeviceGroup } from './mockEquipment';
 
 /** 可拖拽到画布的 Tip 贴图（public/icons 下 png） */
@@ -104,7 +106,19 @@ const viewerRef = shallowRef<Viewer | null>(null);
 const sceneConfig = ref<SceneConfig | null>(null);
 const roomContext = ref<RoomSceneContext | null>(null);
 const roomPickerOpen = ref(true);
-const pickedRoomId = ref(MOCK_ROOM_SCENES[0]!.roomId);
+
+const FALLBACK_ROOM_CONTEXT: RoomSceneContext = {
+  roomId: 'room-default',
+  floorRoomLabel: '默认房间',
+  buildingPath: '默认项目',
+  initialSceneConfig: structuredClone(modelDemoConfig) as SceneConfig,
+};
+
+const availableRoomScenes = computed<RoomSceneContext[]>(() =>
+  MOCK_ROOM_SCENES.length ? MOCK_ROOM_SCENES : [FALLBACK_ROOM_CONTEXT],
+);
+
+const pickedRoomId = ref(availableRoomScenes.value[0]!.roomId);
 
 const loading = ref(false);
 const sceneRows = ref<SceneModelRow[]>([]);
@@ -431,6 +445,13 @@ async function applyScene() {
   loading.value = true;
   try {
     await applySceneConfig(v, cfg);
+    // 在通过 SceneConfig 加载完场景后做一次通用几何优化（实例化 / 合批）
+    optimizeSceneForPerformance(v, {
+      minInstanceCount: 2,
+      enableInstanceColor: true,
+      groupByMaterial: true,
+      disposeSources: false,
+    });
     refreshModelList();
     syncActiveViewAfterApply();
   } finally {
@@ -536,7 +557,9 @@ function ensureViewer() {
 }
 
 function confirmRoom() {
-  const ctx = getRoomContext(pickedRoomId.value);
+  const ctx =
+    getRoomContext(pickedRoomId.value) ??
+    availableRoomScenes.value.find((r) => r.roomId === pickedRoomId.value);
   if (!ctx) {
     ElMessage.error('无效房间');
     return;
@@ -557,7 +580,7 @@ function confirmRoom() {
 function tryInitFromUrl() {
   const id = new URLSearchParams(location.search).get('roomId');
   if (!id) return;
-  const ctx = getRoomContext(id);
+  const ctx = getRoomContext(id) ?? availableRoomScenes.value.find((r) => r.roomId === id);
   if (!ctx) return;
   roomContext.value = ctx;
   sceneConfig.value = structuredClone(ctx.initialSceneConfig) as SceneConfig;
@@ -580,6 +603,10 @@ function focusRow(row: SceneModelRow) {
     detachGizmo();
   }
   void v.focus(row.ref, { duration: 0.45 });
+}
+
+function setRowVisible(row: SceneModelRow, visible: boolean) {
+  row.ref.visible = visible;
 }
 
 function openEdit(row: SceneModelRow) {
@@ -812,7 +839,7 @@ onBeforeUnmount(() => {
         <el-form-item label="楼层 / 房间">
           <el-select v-model="pickedRoomId" style="width: 100%">
             <el-option
-              v-for="r in MOCK_ROOM_SCENES"
+              v-for="r in availableRoomScenes"
               :key="r.roomId"
               :label="`${r.buildingPath} — ${r.floorRoomLabel}`"
               :value="r.roomId"
@@ -972,6 +999,14 @@ onBeforeUnmount(() => {
                     <el-tag v-else-if="row.kind === 'mesh'" size="small" type="info" class="tag">Mesh</el-tag>
                     <el-tag v-else size="small" type="success" class="tag">节点</el-tag>
                     <el-tag v-if="row.duplicateName" size="small" type="danger" class="tag">重名</el-tag>
+                    <el-switch
+                      class="model-visible-switch"
+                      :model-value="row.ref.visible"
+                      active-text="显"
+                      inactive-text="隐"
+                      @click.stop
+                      @change="setRowVisible(row, $event)"
+                    />
                   </div>
                   <div class="model-sub muted">{{ row.label }}</div>
                 </div>

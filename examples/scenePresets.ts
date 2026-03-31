@@ -51,7 +51,7 @@ export const modelDemoConfig: SceneConfig = {
       models: [
         {
           id: 'main',
-          url: '/models/空调机房FAB6_draco.glb',
+          url: '/models/P2_FAB_F1_update_draco.glb',
           position: [0, 0, 0],
           rotation: [0, 0, 0],
           scale: [1, 1, 1],

@@ -9,4 +9,5 @@ export * from './modules/InteractionManager';
 export * from './modules/CameraController';
 export * from './modules/EffectManager';
 export * from './modules/TipManager';
+export * from './effects';
 
