@@ -1,13 +1,21 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { gsap } from 'gsap';
-import type { FocusOptions, RoamOptions, RoamPathPoint, ViewPreset, SetViewOptions } from '../types';
+import type {
+  FocusOptions,
+  OrbitControlsOptions,
+  RoamOptions,
+  RoamPathPoint,
+  ViewPreset,
+  SetViewOptions,
+} from '../types';
 
 export interface CameraControllerConfig {
   canvas: HTMLCanvasElement;
   camera: THREE.PerspectiveCamera;
   enableOrbitControls: boolean;
   enableRoaming: boolean;
+  orbitControls?: OrbitControlsOptions;
 }
 
 export class CameraController {
@@ -21,10 +29,30 @@ export class CameraController {
       const c = new OrbitControls(cfg.camera, cfg.canvas);
       c.enableDamping = true;
       c.dampingFactor = 0.08;
+      if (cfg.orbitControls) {
+        CameraController.applyOrbitControlOptions(c, cfg.orbitControls);
+      }
       this.controls = c;
     } else {
       this.controls = null;
     }
+  }
+
+  private static applyOrbitControlOptions(c: OrbitControls, o: OrbitControlsOptions): void {
+    if (o.enableRotate !== undefined) c.enableRotate = o.enableRotate;
+    if (o.enableZoom !== undefined) c.enableZoom = o.enableZoom;
+    if (o.enablePan !== undefined) c.enablePan = o.enablePan;
+    if (o.enableDamping !== undefined) c.enableDamping = o.enableDamping;
+    if (o.dampingFactor !== undefined) c.dampingFactor = o.dampingFactor;
+    if (o.minDistance !== undefined) c.minDistance = o.minDistance;
+    if (o.maxDistance !== undefined) c.maxDistance = o.maxDistance;
+    if (o.minPolarAngle !== undefined) c.minPolarAngle = o.minPolarAngle;
+    if (o.maxPolarAngle !== undefined) c.maxPolarAngle = o.maxPolarAngle;
+    if (o.minAzimuthAngle !== undefined) c.minAzimuthAngle = o.minAzimuthAngle;
+    if (o.maxAzimuthAngle !== undefined) c.maxAzimuthAngle = o.maxAzimuthAngle;
+    if (o.rotateSpeed !== undefined) c.rotateSpeed = o.rotateSpeed;
+    if (o.zoomSpeed !== undefined) c.zoomSpeed = o.zoomSpeed;
+    if (o.panSpeed !== undefined) c.panSpeed = o.panSpeed;
   }
 
   update(dtSeconds: number): void {

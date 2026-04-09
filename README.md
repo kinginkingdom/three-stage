@@ -97,7 +97,7 @@ viewer.on('object-click', (hit) => {
 - **场景配置工作台（关系映射 + 编辑合一）**：`mapping.html` + `examples/mapping/`
   - **前置**：弹窗模拟「楼层房间 ↔ 场景文件 / 初始 JSON」绑定；也可 `?roomId=room-substation-1f` 直达。
   - 进入后按房间加载**设备 / 设备组**列表；场景来自 `SceneConfig`（含已有 Tip）；**仅列出自身 `userData.interact === true`** 的 Mesh、Group（节点）、Tip；**模型 ID 为 `userData.name`**。
-  - **Tip**：画布上方 **图标条拖到画布** 放置；选中后 **TransformControls** + **固定悬浮窗** 编辑（与旧场景编辑器一致）；侧栏「高级」可粘贴 JSON。
+  - **Tip**：画布上方 **图标条拖到画布** 放置；选中后 **TransformControls** + **固定悬浮窗** 编辑（与旧场景编辑器一致）；支持 **复制 Tip**（位置略偏移）；`binding.type` 下拉预设类型；侧栏「高级」可粘贴 JSON。
   - **关联映射**：总表 + 设备/设备组**两个下拉二选一**；绑定按房间存 `localStorage`（Demo）。
   - **预设视角**：`SceneConfig.cameras.views` 支持多书签；画布上方可快速切换，侧栏「高级」可更新某条书签、改默认视角或从当前机位新增书签。库内新增 `applySceneCameraView` / `applySceneCameraViewById` / `syncCameraToSceneView`。
   - **光照**：工作台 Viewer 使用略增强的默认半球光 + 主光 + 两盏补光，减轻模型场景偏暗。
@@ -120,6 +120,8 @@ export interface ViewerConfig {
   dracoDecoderPath?: string; // 默认 '/draco/'
 
   enableOrbitControls?: boolean; // 默认 true
+  /** 轨道控制器细项：`enableRotate` / `enableZoom` / `enablePan`、距离角限制、速度等 */
+  orbitControls?: OrbitControlsOptions;
   enableRoaming?: boolean;       // 默认 false
   enableDrag?: boolean;          // 默认 false
 
@@ -131,6 +133,8 @@ export interface ViewerConfig {
   optimizer?: OptimizerOptions;
 }
 ```
+
+`OrbitControlsOptions` 与 `Viewer` 等均从 `@murmur_han/three-stage` 导出；仅当 `enableOrbitControls === true` 时应用。
 
 ### 射线与 Hover（RaycastOptions）
 
@@ -450,13 +454,19 @@ viewer.on('object-click', (hit) => {
 
 ## 版本记录
 
+### 0.3.0
+
+- **ViewerConfig**：新增 `orbitControls?: OrbitControlsOptions`，在保留 OrbitControls 的前提下可单独关闭旋转/缩放/平移，或配置 `minDistance` / `maxDistance`、`rotateSpeed` / `zoomSpeed` / `panSpeed` 等。
+- **场景配置工作台（mapping.html）**：Tip 支持「复制此 Tip」（新 Tip 位置略偏移，便于点选）；新建 Tip 默认带 `binding.type`；悬浮窗内 `binding.type` 为下拉（camera / pos / wet / temp / alarm / calling / people）。
+- **示例工程**：根目录 `env.d.ts`、`tsconfig.json` 接入 `@vue/typescript-plugin`，新增 `npm run typecheck:vue` 以检查 Vue SFC（与库本体 `npm run typecheck` 并存）。
+
 ### 0.2.2
 
 - **场景配置工作台（mapping.html）**：支持 `scene.source.models` 多 GLB 模型编辑；新增「模型源」面板，可添加/删除模型条目，编辑 `id` / `url` / `position` / `scale` / `visible`。
 - **BIM 拖拽与显隐**：通过工作台右侧「场景模型」列表选中 GLB 根节点，使用 TransformControls 拖拽平移/缩放，释放时自动将坐标写回 `SceneConfig`；列表新增显隐开关（Tip / Mesh / 节点均可控制）。
 - **性能与交互优化**：新增 `optimizeSceneForPerformance(viewer, options)` 场景优化辅助；拖拽 Sprite / BIM 时仅在拖拽结束写回配置，避免高频响应式更新导致卡顿；设备列表与「高级」面板支持滚动。
 
-### 0.2.1*** End Patch```} />
+### 0.2.1
 
 - **场景相机**：新增 `applySceneCameraView`、`applySceneCameraViewById`、`syncCameraToSceneView`；`applySceneCameras` 内部复用单视角应用逻辑。
 - **示例预设**：`scenePresets` 中模型 / 背景场景补充多组 `cameras.views` 书签。
@@ -478,7 +488,7 @@ viewer.on('object-click', (hit) => {
 
 - 在 `package.json` 中设置：
   - `name`：你要发布的包名（例如 `@your-scope/three-stage`）。
-  - `version`：如 `0.2.1`。
+  - `version`：如 `0.3.0`。
   - `description` / `keywords` / `repository` / `author` 等元信息。
 - 确保构建脚本：
 

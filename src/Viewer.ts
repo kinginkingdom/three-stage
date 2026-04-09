@@ -113,6 +113,7 @@ export class Viewer {
       camera: this.camera,
       enableOrbitControls: config.enableOrbitControls ?? true,
       enableRoaming: config.enableRoaming ?? false,
+      ...(config.orbitControls != null ? { orbitControls: config.orbitControls } : {}),
     });
     if (this.navigator.controls && initCam?.target) {
       this.navigator.controls.target.set(target[0], target[1], target[2]);

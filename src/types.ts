@@ -37,6 +37,29 @@ export interface ViewerEvents extends EventMap {
   'drag-end': InteractionData;
 }
 
+/**
+ * 细粒度配置 Three.js `OrbitControls`（仅当 `enableOrbitControls === true` 时生效）。
+ * 未写明的项保持 three.js 默认；本库创建控制器后会先打开阻尼，可被此处覆盖。
+ *
+ * 常见对应关系：旋转 ≈ `enableRotate`（左键拖绕目标转），缩放 ≈ `enableZoom`（滚轮等），平移 ≈ `enablePan`（右键 / 中键等，依 `mouseButtons`）。
+ */
+export interface OrbitControlsOptions {
+  enableRotate?: boolean;
+  enableZoom?: boolean;
+  enablePan?: boolean;
+  enableDamping?: boolean;
+  dampingFactor?: number;
+  minDistance?: number;
+  maxDistance?: number;
+  minPolarAngle?: number;
+  maxPolarAngle?: number;
+  minAzimuthAngle?: number;
+  maxAzimuthAngle?: number;
+  rotateSpeed?: number;
+  zoomSpeed?: number;
+  panSpeed?: number;
+}
+
 export interface ViewerConfig {
   canvas: HTMLCanvasElement;
   /**
@@ -53,6 +76,8 @@ export interface ViewerConfig {
   dracoDecoderPath?: string;
 
   enableOrbitControls?: boolean;
+  /** 轨道控制器细项；`enableOrbitControls === false` 时忽略 */
+  orbitControls?: OrbitControlsOptions;
   enableRoaming?: boolean;
   enableDrag?: boolean;
   /** Enable BVH acceleration for raycasting (three-mesh-bvh). */

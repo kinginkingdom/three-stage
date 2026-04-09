@@ -4,6 +4,10 @@
     "useDefineForClassFields": true,
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+    "jsxImportSource": "vue",
+    "plugins": [{ "name": "@vue/typescript-plugin" }],
+    "types": ["vite/client", "element-plus/global"],
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -18,7 +22,16 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
   },
-  "include": ["src", "examples"],
-  "exclude": ["examples/editor/**"]
+  "vueCompilerOptions": {
+    "target": 3.5
+  },
+  "include": [
+    "env.d.ts",
+    "src/**/*.ts",
+    "examples/**/*.ts",
+    "examples/**/*.tsx",
+    "examples/**/*.vue"
+  ],
+  "exclude": ["examples/editor/**", "node_modules"]
 }
 

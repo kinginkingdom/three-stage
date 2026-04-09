@@ -1,6 +1,6 @@
 {
   "name": "@murmur_han/three-stage",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "工业级 Three.js 场景封装：GLB/GLTF 加载、BVH 拾取、交互、摄像机导航、高亮、Tip 图标与 DOM 定位",
   "keywords": [
     "three",
@@ -42,6 +42,7 @@
     "build": "npm run build:types && vite build",
     "build:types": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:vue": "vue-tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
@@ -52,9 +53,11 @@
   "devDependencies": {
     "@types/three": "^0.183.1",
     "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/typescript-plugin": "^3.2.6",
     "element-plus": "^2.9.6",
     "typescript": "^5.8.2",
     "vite": "^6.2.2",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "vue-tsc": "^3.2.6"
   }
 }

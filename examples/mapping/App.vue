@@ -3,7 +3,7 @@ import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watch, nextTick 
 import * as THREE from 'three';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { ElMessage } from 'element-plus';
-import { Viewer } from '../../src';
+import { Viewer, type SceneTipConfig } from '../../src';
 import {
   type SceneConfig,
   applySceneCameraViewById,
@@ -35,6 +35,12 @@ const TIP_SPRITE_ASSETS = [
   '/icons/callin.png',
   '/icons/people.png',
 ];
+
+/** Tip binding.type 可选值（与业务点位类型一致） */
+const TIP_BINDING_TYPES = ['camera', 'pos', 'wet', 'temp', 'alarm', 'calling', 'people'] as const;
+const DEFAULT_TIP_BINDING_TYPE: (typeof TIP_BINDING_TYPES)[number] = 'camera';
+/** 复制 Tip 时的世界坐标偏移，避免与原图标重叠难选中 */
+const TIP_COPY_POSITION_OFFSET: [number, number, number] = [0.45, 0.12, 0.45];
 
 /** 工作台内模型场景补光（在 Viewer 默认光基础上略增强 + 双侧补光） */
 const STUDIO_LIGHTING = {
@@ -602,7 +608,8 @@ function focusRow(row: SceneModelRow) {
     selectedTipId.value = null;
     detachGizmo();
   }
-  void v.focus(row.ref, { duration: 0.45 });
+  void v.focus(row.ref, { durationMs: 450 });
+  v.setHighlightObject(row.ref, { color: 0x00e5ff, emissiveIntensity: 1.2 });
 }
 
 function setRowVisible(row: SceneModelRow, visible: boolean) {
@@ -680,6 +687,63 @@ function removeSelectedTip() {
   ElMessage.success('已删除 Tip');
 }
 
+function copySelectedTip() {
+  const id = selectedTipId.value;
+  const v = viewerRef.value;
+  const cfg = sceneConfig.value;
+  if (!id || !v || !cfg?.tips) return;
+  const src = cfg.tips.find((t) => t.id === id);
+  if (!src) return;
+
+  const newId = `tip-${Date.now()}`;
+  const short = newId.slice(-6);
+  const newName = `TIP_${short}`;
+  const pos: [number, number, number] = [
+    src.position[0] + TIP_COPY_POSITION_OFFSET[0],
+    src.position[1] + TIP_COPY_POSITION_OFFSET[1],
+    src.position[2] + TIP_COPY_POSITION_OFFSET[2],
+  ];
+
+  const prevBinding = src.binding ? { ...src.binding } : {};
+  const typeVal = prevBinding.type;
+  const typeStr = typeof typeVal === 'string' ? typeVal : '';
+  const resolvedType =
+    (TIP_BINDING_TYPES as readonly string[]).includes(typeStr) ? typeStr : DEFAULT_TIP_BINDING_TYPE;
+  const binding: Record<string, unknown> = {
+    ...prevBinding,
+    name: newName,
+    type: resolvedType,
+  };
+
+  const tipSize = src.size ?? 0.55;
+  const tipSizeAttenuation = src.sizeAttenuation ?? true;
+  const tipInteract = src.interact ?? true;
+  const newTip: SceneTipConfig = {
+    id: newId,
+    textureUrl: src.textureUrl,
+    position: pos,
+    size: tipSize,
+    sizeAttenuation: tipSizeAttenuation,
+    interact: tipInteract,
+    visible: src.visible ?? true,
+    binding,
+  };
+  cfg.tips.push(newTip);
+  v.tips.addTipSync(newId, pos, {
+    textureUrl: src.textureUrl,
+    size: tipSize,
+    sizeAttenuation: tipSizeAttenuation,
+    interact: tipInteract,
+    userData: { ...binding },
+  });
+  refreshModelList();
+  selectedTipId.value = newId;
+  selectedRowId.value = `tip:${newId}`;
+  const sp = v.tips.getTip(newId);
+  if (sp) attachGizmo(sp);
+  ElMessage.success('已复制 Tip（位置已偏移，便于点选）');
+}
+
 function captureCameraToConfig() {
   const v = viewerRef.value;
   const cfg = sceneConfig.value;
@@ -731,12 +795,12 @@ function placeTipFromPointer(clientX: number, clientY: number, textureUrl: strin
     sizeAttenuation: true,
     interact: true,
     visible: true,
-    binding: { name },
+    binding: { name, type: DEFAULT_TIP_BINDING_TYPE },
   });
   v.tips.addTipSync(id, pos, {
     textureUrl,
     size: 0.55,
-    userData: { name },
+    userData: { name, type: DEFAULT_TIP_BINDING_TYPE },
   });
   refreshModelList();
   selectedTipId.value = id;
@@ -770,6 +834,34 @@ function startTipDragFromPalette(url: string, ev: PointerEvent) {
   ElMessage.info('拖到画布上松开鼠标以放置');
 }
 
+function roundNum(n: number, digits = 3): number {
+  const f = 10 ** digits;
+  return Math.round(n * f) / f;
+}
+
+function compactSceneSnapshot(cfg: SceneConfig, digits = 3): SceneConfig {
+  const out = structuredClone(cfg) as SceneConfig;
+  if (out.scene.source.kind === 'model') {
+    for (const m of out.scene.source.models) {
+      if (m.position) m.position = m.position.map((x) => roundNum(x, digits)) as [number, number, number];
+      if (m.rotation) m.rotation = m.rotation.map((x) => roundNum(x, digits)) as [number, number, number];
+      if (m.scale) m.scale = m.scale.map((x) => roundNum(x, digits)) as [number, number, number];
+    }
+  }
+  if (out.tips) {
+    for (const t of out.tips) {
+      t.position = t.position.map((x) => roundNum(x, digits)) as [number, number, number];
+      if (typeof t.size === 'number') t.size = roundNum(t.size, digits);
+    }
+  }
+  for (const v of out.cameras.views) {
+    v.position = v.position.map((x) => roundNum(x, digits)) as [number, number, number];
+    v.target = v.target.map((x) => roundNum(x, digits)) as [number, number, number];
+    if (typeof v.fov === 'number') v.fov = roundNum(v.fov, digits);
+  }
+  return out;
+}
+
 function saveAll() {
   const v = viewerRef.value;
   const cfg = sceneConfig.value;
@@ -778,7 +870,7 @@ function saveAll() {
     ElMessage.warning('请先完成房间与场景加载');
     return;
   }
-  const sceneSnapshot = captureSceneConfigFromViewer(v, cfg);
+  const sceneSnapshot = compactSceneSnapshot(captureSceneConfigFromViewer(v, cfg), 3);
   const payload = {
     roomId: room.roomId,
     floorRoomLabel: room.floorRoomLabel,
@@ -854,7 +946,7 @@ onBeforeUnmount(() => {
 
     <el-header class="header" height="56px">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true" />
+        <span class="brand-mark" role="presentation"></span>
         <div class="brand-text">
           <div class="brand-title">场景配置工作台</div>
           <div class="breadcrumb">{{ headerBreadcrumb }}</div>
@@ -949,9 +1041,14 @@ onBeforeUnmount(() => {
                   <el-input v-model="bindingDeviceIdField" />
                 </el-form-item>
                 <el-form-item label="binding.type">
-                  <el-input v-model="bindingTypeField" />
+                  <el-select v-model="bindingTypeField" placeholder="选择类型" style="width: 100%">
+                    <el-option v-for="t in TIP_BINDING_TYPES" :key="t" :label="t" :value="t" />
+                  </el-select>
                 </el-form-item>
-                <el-button type="danger" plain size="small" @click="removeSelectedTip">删除此 Tip</el-button>
+                <div class="float-tip-actions">
+                  <el-button type="primary" plain size="small" @click="copySelectedTip">复制此 Tip</el-button>
+                  <el-button type="danger" plain size="small" @click="removeSelectedTip">删除此 Tip</el-button>
+                </div>
               </el-form>
             </template>
 
@@ -1417,6 +1514,13 @@ onBeforeUnmount(() => {
 
 .float-form {
   padding: 0 14px;
+}
+
+.float-tip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 14px 14px;
 }
 
 .float-reopen {
