@@ -454,7 +454,7 @@ viewer.on('object-click', (hit) => {
 
 ## 版本记录
 
-### 0.3.0
+### 0.2.3
 
 - **ViewerConfig**：新增 `orbitControls?: OrbitControlsOptions`，在保留 OrbitControls 的前提下可单独关闭旋转/缩放/平移，或配置 `minDistance` / `maxDistance`、`rotateSpeed` / `zoomSpeed` / `panSpeed` 等。
 - **场景配置工作台（mapping.html）**：Tip 支持「复制此 Tip」（新 Tip 位置略偏移，便于点选）；新建 Tip 默认带 `binding.type`；悬浮窗内 `binding.type` 为下拉（camera / pos / wet / temp / alarm / calling / people）。
@@ -488,7 +488,7 @@ viewer.on('object-click', (hit) => {
 
 - 在 `package.json` 中设置：
   - `name`：你要发布的包名（例如 `@your-scope/three-stage`）。
-  - `version`：如 `0.3.0`。
+  - `version`：如 `0.2.3`。
   - `description` / `keywords` / `repository` / `author` 等元信息。
 - 确保构建脚本：
 
