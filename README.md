@@ -282,16 +282,15 @@ viewer.on('frame', ({ dt, t }) => {
 ## 摄像机与导航
 
 ```ts
-// 对单个对象做平滑对焦（沿当前视线方向拉远/拉近，使包围球适配竖直 FOV）
+// 对单个对象做平滑对焦（内部：包围球 + 当前视线方向推远/拉近，GSAP 过渡）
 await viewer.focus(targetObject, {
   durationMs: 650,
   padding: 1.4,
-  // 默认 2：真实包围球半径小于此时会抬升有效半径，相机更远（适合 Sprite 等防贴脸）。
-  // 希望大模型、小模型占屏比例接近时，可改为较小值（如 0）或按业务调参。
+  // 默认 2：过小物体不会贴脸；希望小模型与大模型占屏差不多时可改小（如 0）
   minRadius: 2,
   setOrbitTarget: true,
-  // 与 Orbit 右键平移同类：framing 完成后在视平面平移「相机 + 观察点」，单位为世界长度
-  viewPlanePan: { right: 0.5, up: 0 },
+  // 与 Orbit 右键平移同类：沿视平面平移「相机 + 观察点」，世界单位
+  viewPlanePan: { right: 0.3, up: 0.1 },
 });
 
 // 巡检路径（相机沿曲线移动）
@@ -306,6 +305,8 @@ viewer.startRoaming(
 ```
 
 内部使用 GSAP 做摄像机动画（可中断、可复用）。
+
+**FocusOptions 摘要**：`durationMs`、`padding`（留白倍数）、`minRadius`（包围球半径下限）、`setOrbitTarget`（是否同步 Orbit 目标）、`viewPlanePan`（视平面平移）。
 
 ### 设备巡检（聚焦循环）
 
@@ -458,6 +459,10 @@ viewer.on('object-click', (hit) => {
 
 ## 版本记录
 
+### 0.2.4
+
+- **FocusOptions**：新增 `viewPlanePan?: { right?: number; up?: number }`，在对焦完成后沿相机视平面等量平移相机与观察点，行为接近 Orbit 右键平移，便于构图偏移。
+
 ### 0.2.3
 
 - **ViewerConfig**：新增 `orbitControls?: OrbitControlsOptions`，在保留 OrbitControls 的前提下可单独关闭旋转/缩放/平移，或配置 `minDistance` / `maxDistance`、`rotateSpeed` / `zoomSpeed` / `panSpeed` 等。
@@ -492,7 +497,7 @@ viewer.on('object-click', (hit) => {
 
 - 在 `package.json` 中设置：
   - `name`：你要发布的包名（例如 `@your-scope/three-stage`）。
-  - `version`：如 `0.2.3`。
+  - `version`：如 `0.2.4`。
   - `description` / `keywords` / `repository` / `author` 等元信息。
 - 确保构建脚本：
 
