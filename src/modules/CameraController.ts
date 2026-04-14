@@ -38,6 +38,19 @@ export class CameraController {
     }
   }
 
+  /** forward: 从相机指向目标（视线方向），与 focus 结束姿态一致 */
+  private static orthonormalViewBasis(forward: THREE.Vector3): { right: THREE.Vector3; up: THREE.Vector3 } {
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(worldUp, forward);
+    if (right.lengthSq() < 1e-10) {
+      right.set(1, 0, 0);
+    } else {
+      right.normalize();
+    }
+    const up = new THREE.Vector3().crossVectors(forward, right).normalize();
+    return { right, up };
+  }
+
   private static applyOrbitControlOptions(c: OrbitControls, o: OrbitControlsOptions): void {
     if (o.enableRotate !== undefined) c.enableRotate = o.enableRotate;
     if (o.enableZoom !== undefined) c.enableZoom = o.enableZoom;
@@ -94,6 +107,16 @@ export class CameraController {
 
     const fromLookAt = this.getLookAt();
     const toLookAt = toTarget.clone();
+
+    const panR = opts.viewPlanePan?.right ?? 0;
+    const panU = opts.viewPlanePan?.up ?? 0;
+    if (panR !== 0 || panU !== 0) {
+      const forward = new THREE.Vector3().subVectors(toLookAt, toPos).normalize();
+      const { right, up } = CameraController.orthonormalViewBasis(forward);
+      const pan = right.clone().multiplyScalar(panR).add(up.clone().multiplyScalar(panU));
+      toPos.add(pan);
+      toLookAt.add(pan);
+    }
 
     const setOrbitTarget = opts.setOrbitTarget ?? true;
 

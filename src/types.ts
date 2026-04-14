@@ -289,6 +289,11 @@ export interface FocusOptions {
   minRadius?: number;
   /** If true, also moves OrbitControls target. */
   setOrbitTarget?: boolean;
+  /**
+   * 与 Orbit 右键平移同类：在 framing 完成后，沿相机视平面（right / up）平移「相机 + 观察点」，
+   * 模型在画布上相对移动。单位为世界坐标长度，与当前相机尺度一致。
+   */
+  viewPlanePan?: { right?: number; up?: number };
 }
 
 export interface RoamPathPoint {

@@ -282,12 +282,16 @@ viewer.on('frame', ({ dt, t }) => {
 ## 摄像机与导航
 
 ```ts
-// 对单个对象做平滑对焦
+// 对单个对象做平滑对焦（沿当前视线方向拉远/拉近，使包围球适配竖直 FOV）
 await viewer.focus(targetObject, {
   durationMs: 650,
   padding: 1.4,
-  minRadius: 2,  // Sprite 等小物体避免镜头过近
+  // 默认 2：真实包围球半径小于此时会抬升有效半径，相机更远（适合 Sprite 等防贴脸）。
+  // 希望大模型、小模型占屏比例接近时，可改为较小值（如 0）或按业务调参。
+  minRadius: 2,
   setOrbitTarget: true,
+  // 与 Orbit 右键平移同类：framing 完成后在视平面平移「相机 + 观察点」，单位为世界长度
+  viewPlanePan: { right: 0.5, up: 0 },
 });
 
 // 巡检路径（相机沿曲线移动）
