@@ -314,6 +314,13 @@ export interface FoundMesh {
   center: THREE.Vector3;
 }
 
+/** {@link Viewer.findMeshes} 的广义版本：`object` 可为 Group / Mesh 等任意 Object3D */
+export interface FoundObject3D {
+  object: THREE.Object3D;
+  box: THREE.Box3;
+  center: THREE.Vector3;
+}
+
 export type InfluenceZoneShape =
   | { kind: 'sphere'; center: [number, number, number]; radius: number }
   | { kind: 'box'; center: [number, number, number]; size: [number, number, number] };

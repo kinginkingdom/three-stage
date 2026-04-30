@@ -223,19 +223,35 @@ export interface BVHOptions {
 - `viewer.enableBVHNow()`
   - 可手动在合批/精简后重新构建 BVH。
 
-### 查找 Mesh：`viewer.findMeshes`
+### 查找场景节点：`viewer.findMeshes` / `viewer.findObjects`
 
-按 userData 或自定义条件查找 mesh，返回包围盒和中心点，方便做批量操作：
+两者使用 **同一套** userData / 自定义谓词与 `interactableOnly` 语义；内部共用一个遍历实现，仅在是否限定为 `Mesh`、`是否跳过 ViewerRoot` 上分叉。
+
+- **`findMeshes`**：只收集 `THREE.Mesh`，适合批量 tip、统计可拾取几何体等。
+- **`findObjects`**：收集任意 `THREE.Object3D`（含 `Group`、空节点等）。自定义谓词里可配合 `obj.isGroup`、`obj.type` 等收窄范围。默认 **`skipViewerRoot: true`**，避免把资源挂载根节点 `ViewerRoot` 选进来。
+
+按 userData 或自定义条件查找 mesh：
 
 ```ts
-const results = viewer.findMeshes(
+const meshes = viewer.findMeshes(
   (o) => String(o.userData?.name ?? '').includes('ground'),
   { interactableOnly: true },
 );
 
-results.forEach(({ object, box, center }) => {
+meshes.forEach(({ object, box, center }) => {
   console.log(object.name, center, box);
 });
+```
+
+查找 Group 等业务节点（示例）：
+
+```ts
+const groups = viewer.findObjects((o) => o.isGroup && Boolean(o.userData?.floorId), {
+  interactableOnly: false,
+});
+
+// 若需要把 ViewerRoot 也算入结果：
+viewer.findObjects((o) => o.userData?.type === 'root', { skipViewerRoot: false });
 ```
 
 返回类型：
@@ -243,6 +259,12 @@ results.forEach(({ object, box, center }) => {
 ```ts
 interface FoundMesh {
   object: THREE.Mesh;
+  box: THREE.Box3;
+  center: THREE.Vector3;
+}
+
+interface FoundObject3D {
+  object: THREE.Object3D;
   box: THREE.Box3;
   center: THREE.Vector3;
 }

@@ -16,6 +16,7 @@ import type {
   RoamPathPoint,
   HighlightStyle,
   FoundMesh,
+  FoundObject3D,
   InfluenceZoneShape,
   InfluenceZoneStyle,
   InteractionData,
@@ -408,6 +409,7 @@ export class Viewer {
 
   /**
    * 查找满足条件的 mesh 列表，可用于批量加 tip / 巡检 / 统计等。
+   * （实现上等同于 {@link findObjects} + 仅 Mesh 分支；共享同一套遍历与筛选逻辑。）
    * @param filter userData 过滤条件对象或自定义函数
    * @param opts.interactableOnly 若为 true，仅返回祖先链上带 interact=true 的 mesh
    */
@@ -416,33 +418,29 @@ export class Viewer {
     opts: { interactableOnly?: boolean } = {},
   ): FoundMesh[] {
     this.assertNotDisposed();
-    const match =
-      typeof filter === 'function'
-        ? filter
-        : (obj: THREE.Object3D) => {
-            const ud = obj.userData as Record<string, unknown>;
-            const f = filter as Record<string, unknown>;
-            for (const k of Object.keys(f)) {
-              if (ud[k] !== f[k]) return false;
-            }
-            return Object.keys(f).length > 0;
-          };
-    const results: FoundMesh[] = [];
-    const interactableOnly = opts.interactableOnly ?? false;
-
-    this.root.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      if (interactableOnly && !this.hasInteractInAncestry(mesh)) return;
-      if (!match(mesh)) return;
-
-      const box = new THREE.Box3().setFromObject(mesh);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      results.push({ object: mesh, box, center });
+    const rows = this.findMatchingDescendants(filter, {
+      interactableOnly: opts.interactableOnly ?? false,
+      onlyMesh: true,
+      skipViewerRoot: false,
     });
+    return rows.map((row) => ({ ...row, object: row.object as THREE.Mesh }));
+  }
 
-    return results;
+  /**
+   * 与 {@link findMeshes} 相同筛选语义，但遍历 **所有** Object3D（如 Group、空节点等），不限于 Mesh。
+   * 自定义 `filter` 里可写 `obj.isGroup`、`obj.type === 'Group'` 等缩小范围。
+   * @param opts.skipViewerRoot 默认 true，不返回挂资源的根 Group（`ViewerRoot`）
+   */
+  findObjects(
+    filter: UserDataFilter | ((obj: THREE.Object3D) => boolean),
+    opts: { interactableOnly?: boolean; skipViewerRoot?: boolean } = {},
+  ): FoundObject3D[] {
+    this.assertNotDisposed();
+    return this.findMatchingDescendants(filter, {
+      interactableOnly: opts.interactableOnly ?? false,
+      onlyMesh: false,
+      skipViewerRoot: opts.skipViewerRoot ?? true,
+    });
   }
 
   async focus(target: THREE.Object3D, opts: FocusOptions = {}): Promise<void> {
@@ -816,6 +814,44 @@ export class Viewer {
     const prev = this.state;
     this.state = next;
     if (prev !== next) this.events.emit('state-change', { prev, next });
+  }
+
+  private normalizeFindFilter(
+    filter: UserDataFilter | ((obj: THREE.Object3D) => boolean),
+  ): (obj: THREE.Object3D) => boolean {
+    if (typeof filter === 'function') return filter;
+    return (obj: THREE.Object3D) => {
+      const ud = obj.userData as Record<string, unknown>;
+      const f = filter as Record<string, unknown>;
+      for (const k of Object.keys(f)) {
+        if (ud[k] !== f[k]) return false;
+      }
+      return Object.keys(f).length > 0;
+    };
+  }
+
+  /** findMeshes / findObjects 共用：一次 traverse，`onlyMesh` 与 skipViewerRoot 做分支 */
+  private findMatchingDescendants(
+    filter: UserDataFilter | ((obj: THREE.Object3D) => boolean),
+    opts: { interactableOnly: boolean; onlyMesh: boolean; skipViewerRoot: boolean },
+  ): FoundObject3D[] {
+    const match = this.normalizeFindFilter(filter);
+    const { interactableOnly, onlyMesh, skipViewerRoot } = opts;
+    const results: FoundObject3D[] = [];
+
+    this.root.traverse((o) => {
+      if (skipViewerRoot && o === this.root) return;
+      if (onlyMesh && !(o as THREE.Mesh).isMesh) return;
+      if (interactableOnly && !this.hasInteractInAncestry(o)) return;
+      if (!match(o)) return;
+
+      const box = new THREE.Box3().setFromObject(o);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      results.push({ object: o, box, center });
+    });
+
+    return results;
   }
 
   private hasInteractInAncestry(o: THREE.Object3D): boolean {
