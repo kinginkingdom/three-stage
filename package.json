@@ -1,6 +1,6 @@
 {
   "name": "@murmur_han/three-stage",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "工业级 Three.js 场景封装：GLB/GLTF 加载、BVH 拾取、交互、摄像机导航、高亮、Tip 图标与 DOM 定位",
   "keywords": [
     "three",
