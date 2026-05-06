@@ -331,6 +331,9 @@ export interface InfluenceZoneStyle {
   dashed?: boolean;
 }
 
+/** 高亮分层：`interaction` 供 hover/拾取等临时高亮；`state` 供报警、选中等需保留的状态高亮，不会被交互层清空。 */
+export type HighlightLayer = 'interaction' | 'state';
+
 export interface HighlightStyle {
   color?: number;
   emissiveIntensity?: number;

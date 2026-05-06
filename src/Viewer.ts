@@ -524,20 +524,61 @@ export class Viewer {
     return this.findInteractionDataObject(resolved, opts);
   }
 
+  /**
+   * 交互驱动的高亮（如 hover、指针 hit）：`hit === null` 时只清除**交互层**，不会动状态层。
+   * 若要从代码里对已知 `Object3D` 做与 hover 同层的「弱高亮」，请用 {@link setInteractionHighlightObject}。
+   */
   setHighlightFromInteraction(hit: InteractionData | null, style: HighlightStyle = {}): void {
     this.assertNotDisposed();
     const obj = this.resolveInteractionDataTarget(hit, { fallbackToHighlightRoot: true });
     if (!obj) {
-      this.visualizer.setHighlight(null);
+      this.visualizer.setHighlight(null, {}, 'interaction');
       return;
     }
-    this.visualizer.setHighlight({ object: obj, instanceId: hit?.instanceId }, style);
+    this.visualizer.setHighlight({ object: obj, instanceId: hit?.instanceId }, style, 'interaction');
   }
 
+  /**
+   * **弱高亮（交互层）**：由代码指定对象，与 `setHighlightFromInteraction` 同属一层，可与状态层强高亮并存；
+   * 典型用途：巡检 focus、键盘焦点、`Object3D` 引用驱动的临时提示（不等同于业务报警）。
+   * 会先做与交互射线一致的 `highlightRoot` / `interact` 上卷解析。
+   */
+  setInteractionHighlightObject(obj: THREE.Object3D | null, style: HighlightStyle = {}): void {
+    this.assertNotDisposed();
+    if (!obj) {
+      this.visualizer.setHighlight(null, {}, 'interaction');
+      return;
+    }
+    const target = this.findInteractionDataObject(obj, { fallbackToHighlightRoot: true });
+    this.visualizer.setHighlight({ object: target, instanceId: undefined }, style, 'interaction');
+  }
+
+  /**
+   * **强高亮（状态层）**：业务状态如报警闪烁、侧栏选中设备等，应明显区分于交互弱高亮。
+   * 传入 `null` 仅清除状态层，不影响交互层（hover / 巡检 focus 等）。
+   */
   setHighlightObject(obj: THREE.Object3D | null, style: HighlightStyle = {}): void {
     this.assertNotDisposed();
-    if (!obj) this.visualizer.setHighlight(null);
-    else this.visualizer.setHighlight({ object: obj, instanceId: undefined }, style);
+    if (!obj) this.visualizer.setHighlight(null, {}, 'state');
+    else this.visualizer.setHighlight({ object: obj, instanceId: undefined }, style, 'state');
+  }
+
+  /** 只清除 hover 等交互高亮。 */
+  clearInteractionHighlight(): void {
+    this.assertNotDisposed();
+    this.visualizer.clearHighlightLayer('interaction');
+  }
+
+  /** 只清除 `setHighlightObject` 设置的状态高亮。 */
+  clearStateHighlight(): void {
+    this.assertNotDisposed();
+    this.visualizer.clearHighlightLayer('state');
+  }
+
+  /** 清除全部两层高亮。 */
+  clearAllHighlights(): void {
+    this.assertNotDisposed();
+    this.visualizer.clearHighlightLayer('all');
   }
 
   upsertInfluenceZone(id: string, shape: InfluenceZoneShape, style: InfluenceZoneStyle = {}): THREE.Object3D {

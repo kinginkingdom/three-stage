@@ -147,11 +147,14 @@ export class TipManager {
 
   /** 注册类型贴图，供 addTip({ type: 'camera' }) 等使用 */
   registerTexture(type: TipType | string, urlOrTexture: string | THREE.Texture): void {
+    const reg = (this.config.textureRegistry ??= {});
+    if (reg[type] === urlOrTexture) return;
+
     if (typeof urlOrTexture === 'string') {
       this.textureCache.delete(type);
-      (this.config.textureRegistry ??= {})[type] = urlOrTexture;
+      reg[type] = urlOrTexture;
     } else {
-      (this.config.textureRegistry ??= {})[type] = urlOrTexture;
+      reg[type] = urlOrTexture;
     }
   }
 

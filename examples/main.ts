@@ -310,7 +310,13 @@ async function run() {
     if (idx < 0 || idx >= inspectTargets.length) return;
     inspectIndex = idx;
     updateInspectInfo();
-    viewer.setHighlightObject(inspectTargets[idx]!);
+    // 巡检 focus：弱高亮（交互层），与报警等状态层强高亮可同时存在
+    viewer.setInteractionHighlightObject(inspectTargets[idx]!, {
+      color: 0x4fc3f7,
+      emissiveIntensity: 1.0,
+      breathing: true,
+      breathingMax: 0.22,
+    });
     viewer.focus(inspectTargets[idx]!, { durationMs: 600, padding: 1.4 }).catch(() => void 0);
   };
   document.getElementById('inspect-prev')?.addEventListener('click', () => {
@@ -328,7 +334,7 @@ async function run() {
   document.getElementById('inspect-restore')?.addEventListener('click', () => {
     inspectIndex = -1;
     updateInspectInfo();
-    viewer.setHighlightObject(null);
+    viewer.clearInteractionHighlight();
     viewer.clearOcclusionDimming();
     viewer.focus(root, { durationMs: 600, padding: 1.6 }).catch(() => void 0);
   });

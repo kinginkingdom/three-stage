@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { HighlightStyle, InfluenceZoneShape, InfluenceZoneStyle } from '../types';
+import type { HighlightLayer, HighlightStyle, InfluenceZoneShape, InfluenceZoneStyle } from '../types';
 
 export interface HighlightTarget {
   object: THREE.Object3D;
@@ -15,90 +15,135 @@ type MaterialSnapshot = {
   color?: THREE.Color;
 };
 
+type LayerRuntime = {
+  highlighted: HighlightTarget | null;
+  breathingOpts: { min: number; max: number; speed: number } | null;
+  breathingTime: number;
+  highlightColor: THREE.Color;
+};
+
+const LAYERS: HighlightLayer[] = ['interaction', 'state'];
+
 export class EffectManager {
   private disposed = false;
 
-  private highlighted: HighlightTarget | null = null;
+  private readonly layerRuntime: Record<HighlightLayer, LayerRuntime> = {
+    interaction: {
+      highlighted: null,
+      breathingOpts: null,
+      breathingTime: 0,
+      highlightColor: new THREE.Color(),
+    },
+    state: {
+      highlighted: null,
+      breathingOpts: null,
+      breathingTime: 0,
+      highlightColor: new THREE.Color(),
+    },
+  };
+
   private materialSnapshots = new Map<string, MaterialSnapshot>();
-  private instancedSnapshots = new Map<string, Float32Array>(); // key: uuid
-  private highlightColor = new THREE.Color();
-  private breathingOpts: { min: number; max: number; speed: number } | null = null;
-  private breathingTime = 0;
+  private instancedSnapshots = new Map<string, Float32Array>();
 
   private zones = new Map<string, THREE.Object3D>();
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.clearHighlight();
+    this.clearHighlightLayer('all');
     for (const [, o] of this.zones) {
       this.disposeObject(o);
     }
     this.zones.clear();
   }
 
-  setHighlight(target: HighlightTarget | null, style: HighlightStyle = {}): void {
+  setHighlight(
+    target: HighlightTarget | null,
+    style: HighlightStyle = {},
+    layer: HighlightLayer = 'interaction',
+  ): void {
     this.assertNotDisposed();
     if (!target) {
-      this.clearHighlight();
-      this.breathingOpts = null;
+      this.clearHighlightLayer(layer);
       return;
     }
-    if (this.highlighted) this.clearHighlight();
+
+    if (layer === 'interaction' && this.shouldSkipInteractionFor(target)) {
+      this.clearHighlightLayer('interaction');
+      return;
+    }
+
+    if (this.layerRuntime[layer].highlighted) this.clearHighlightLayer(layer);
 
     const color = new THREE.Color(style.color ?? 0x4fc3f7);
     const breathing = style.breathing ?? true;
     const emissiveIntensity = style.emissiveIntensity ?? (breathing ? style.breathingMax ?? 0.35 : 0.3);
 
+    const runtime = this.layerRuntime[layer];
+
     if (breathing) {
-      this.breathingOpts = {
+      runtime.breathingOpts = {
         min: style.breathingMin ?? 0.1,
         max: style.breathingMax ?? 0.24,
         speed: style.breathingSpeed ?? 0.5,
       };
-      this.breathingTime = 0;
-      this.highlightColor.copy(color);
+      runtime.breathingTime = 0;
+      runtime.highlightColor.copy(color);
     } else {
-      this.breathingOpts = null;
+      runtime.breathingOpts = null;
     }
 
-    // Instanced per-instance highlight via instanceColor.
     const inst = target.object as unknown as THREE.InstancedMesh;
     if (inst && inst.isInstancedMesh && typeof target.instanceId === 'number') {
       if (!inst.instanceColor) {
-        this.highlightWholeObject(target.object, color, emissiveIntensity);
+        this.highlightWholeObject(target.object, color, emissiveIntensity, layer);
       } else {
         const uuid = inst.uuid;
         const attr = inst.instanceColor;
         const prev = new Float32Array(attr.array as ArrayLike<number>);
-        this.instancedSnapshots.set(uuid, prev);
+        this.instancedSnapshots.set(snapshotKey(layer, uuid), prev);
         attr.setXYZ(target.instanceId, color.r, color.g, color.b);
         attr.needsUpdate = true;
       }
-      this.highlighted = target;
+      runtime.highlighted = target;
       return;
     }
 
-    this.highlightWholeObject(target.object, color, emissiveIntensity);
-    this.highlighted = target;
+    this.highlightWholeObject(target.object, color, emissiveIntensity, layer);
+    runtime.highlighted = target;
+  }
+
+  /** 清除一层高亮，或 `'all'` 清除全部。 */
+  clearHighlightLayer(layer: HighlightLayer | 'all'): void {
+    if (layer === 'all') {
+      for (const id of LAYERS) this.clearOneLayer(id);
+      return;
+    }
+    this.clearOneLayer(layer);
   }
 
   /** 每帧调用，用于呼吸灯动画 */
   update(dtSeconds: number): void {
-    if (!this.breathingOpts || !this.highlighted) return;
-    this.breathingTime += dtSeconds;
-    const { min, max, speed } = this.breathingOpts;
-    const t = 0.5 + 0.5 * Math.sin(this.breathingTime * Math.PI * 2 * speed);
-    const intensity = min + (max - min) * t;
-    this.applyEmissiveToHighlighted(this.highlightColor, intensity);
+    for (const layer of LAYERS) {
+      const runtime = this.layerRuntime[layer];
+      if (!runtime.breathingOpts || !runtime.highlighted) continue;
+      runtime.breathingTime += dtSeconds;
+      const { min, max, speed } = runtime.breathingOpts;
+      const t = 0.5 + 0.5 * Math.sin(runtime.breathingTime * Math.PI * 2 * speed);
+      const intensity = min + (max - min) * t;
+      this.applyEmissiveToHighlighted(runtime.highlighted, runtime.highlightColor, intensity);
+    }
   }
 
-  private applyEmissiveToHighlighted(color: THREE.Color, intensity: number): void {
-    if (!this.highlighted) return;
-    const obj = this.highlighted.object;
+  private applyEmissiveToHighlighted(
+    target: HighlightTarget,
+    color: THREE.Color,
+    intensity: number,
+  ): void {
+    const obj = target.object;
     const inst = obj as unknown as THREE.InstancedMesh;
-    if (inst?.isInstancedMesh && typeof this.highlighted.instanceId === 'number' && inst.instanceColor) {
-      inst.instanceColor.setXYZ(this.highlighted.instanceId, color.r, color.g, color.b);
+    if (inst?.isInstancedMesh && typeof target.instanceId === 'number' && inst.instanceColor) {
+      inst.instanceColor.setXYZ(target.instanceId, color.r, color.g, color.b);
       inst.instanceColor.needsUpdate = true;
       return;
     }
@@ -114,23 +159,24 @@ export class EffectManager {
     });
   }
 
-  clearHighlight(): void {
-    if (!this.highlighted) return;
-    const obj = this.highlighted.object;
+  private clearOneLayer(layer: HighlightLayer): void {
+    const runtime = this.layerRuntime[layer];
+    if (!runtime.highlighted) return;
+    const obj = runtime.highlighted.object;
     const inst = obj as unknown as THREE.InstancedMesh;
     if (inst && inst.isInstancedMesh) {
-      const snap = this.instancedSnapshots.get(inst.uuid);
+      const snap = this.instancedSnapshots.get(snapshotKey(layer, inst.uuid));
       if (snap && inst.instanceColor) {
         inst.instanceColor.array.set(snap);
         inst.instanceColor.needsUpdate = true;
       }
-      this.instancedSnapshots.delete(inst.uuid);
+      this.instancedSnapshots.delete(snapshotKey(layer, inst.uuid));
     } else {
       obj.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
         if (Array.isArray(mesh.material)) return;
-        const snap = this.materialSnapshots.get(mesh.uuid);
+        const snap = this.materialSnapshots.get(snapshotKey(layer, mesh.uuid));
         if (!snap) return;
         if (snap.originalMaterial) {
           if (snap.clonedMaterial) snap.clonedMaterial.dispose();
@@ -140,10 +186,38 @@ export class EffectManager {
         if (snap.emissive) mat.emissive.copy(snap.emissive);
         if (typeof snap.emissiveIntensity === 'number') mat.emissiveIntensity = snap.emissiveIntensity;
         if (snap.color && (mat as unknown as { color?: THREE.Color }).color) mat.color.copy(snap.color);
-        this.materialSnapshots.delete(mesh.uuid);
+        this.materialSnapshots.delete(snapshotKey(layer, mesh.uuid));
       });
     }
-    this.highlighted = null;
+    runtime.highlighted = null;
+    runtime.breathingOpts = null;
+  }
+
+  private shouldSkipInteractionFor(target: HighlightTarget): boolean {
+    const state = this.layerRuntime.state.highlighted;
+    if (!state) return false;
+
+    if (this.highlightTargetsOverlap(target.object, state.object)) return true;
+
+    const st = state.object as unknown as THREE.InstancedMesh;
+    if (st?.isInstancedMesh && st === target.object) return true;
+
+    return false;
+  }
+
+  /** 状态高亮对象与交互目标在场景树上是否视为同一套高亮（避免 hover 盖住报警母节点等）。 */
+  private highlightTargetsOverlap(a: THREE.Object3D, b: THREE.Object3D): boolean {
+    if (a === b) return true;
+    return this.isDescendantOf(a, b) || this.isDescendantOf(b, a);
+  }
+
+  private isDescendantOf(child: THREE.Object3D, ancestor: THREE.Object3D): boolean {
+    let cur: THREE.Object3D | null = child;
+    while (cur) {
+      if (cur === ancestor) return true;
+      cur = cur.parent;
+    }
+    return false;
   }
 
   upsertInfluenceZone(id: string, shape: InfluenceZoneShape, style: InfluenceZoneStyle = {}): THREE.Object3D {
@@ -203,13 +277,19 @@ export class EffectManager {
     return this.zones.get(id);
   }
 
-  private highlightWholeObject(obj: THREE.Object3D, color: THREE.Color, emissiveIntensity: number): void {
+  private highlightWholeObject(
+    obj: THREE.Object3D,
+    color: THREE.Color,
+    emissiveIntensity: number,
+    layer: HighlightLayer,
+  ): void {
     obj.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       if (Array.isArray(mesh.material)) return;
 
-      if (!this.materialSnapshots.has(mesh.uuid)) {
+      const key = snapshotKey(layer, mesh.uuid);
+      if (!this.materialSnapshots.has(key)) {
         const snap: MaterialSnapshot = {};
         const original = mesh.material as THREE.Material;
         const cloned = original.clone();
@@ -223,7 +303,7 @@ export class EffectManager {
           snap.emissiveIntensity = matNow.emissiveIntensity;
         }
         if ((matNow as unknown as { color?: THREE.Color }).color) snap.color = matNow.color.clone();
-        this.materialSnapshots.set(mesh.uuid, snap);
+        this.materialSnapshots.set(key, snap);
       }
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -256,3 +336,6 @@ export class EffectManager {
   }
 }
 
+function snapshotKey(layer: HighlightLayer, uuid: string): string {
+  return `${layer}:${uuid}`;
+}
